@@ -1,0 +1,6 @@
+apiVersion: ssanginx.jnytnai0613.github.io/v1
+kind: SSANginx
+metadata:
+  name: ssanginx-sample
+spec:
+  # TODO(user): Add fields here

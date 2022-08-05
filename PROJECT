@@ -1,0 +1,16 @@
+domain: jnytnai0613.github.io
+layout:
+- go.kubebuilder.io/v3
+projectName: ssa-nginx-controller
+repo: github.com/jnytnai0613/ssa-nginx-controller
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: jnytnai0613.github.io
+  group: ssanginx
+  kind: SSANginx
+  path: github.com/jnytnai0613/ssa-nginx-controller/api/v1
+  version: v1
+version: "3"
