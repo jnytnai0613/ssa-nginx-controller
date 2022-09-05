@@ -17,25 +17,35 @@ limitations under the License.
 package v1
 
 import (
+	"encoding/json"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	appsv1apply "k8s.io/client-go/applyconfigurations/apps/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type DeploymentSpecApplyConfiguration appsv1apply.DeploymentSpecApplyConfiguration
+
+func (c *DeploymentSpecApplyConfiguration) DeepCopy() *DeploymentSpecApplyConfiguration {
+	out := new(DeploymentSpecApplyConfiguration)
+	bytes, err := json.Marshal(c)
+	if err != nil {
+		panic("Failed to marshal")
+	}
+	err = json.Unmarshal(bytes, out)
+	if err != nil {
+		panic("Failed to unmarshal")
+	}
+	return out
+}
 
 // SSANginxSpec defines the desired state of SSANginx
 type SSANginxSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of SSANginx. Edit ssanginx_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	DepSpec *DeploymentSpecApplyConfiguration `json:"depSpec"`
+	CmData  map[string]string                 `json:"cmdata,omitempty"`
 }
 
 // SSANginxStatus defines the observed state of SSANginx
 type SSANginxStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 //+kubebuilder:object:root=true

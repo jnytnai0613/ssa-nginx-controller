@@ -2,5 +2,52 @@ apiVersion: ssanginx.jnytnai0613.github.io/v1
 kind: SSANginx
 metadata:
   name: ssanginx-sample
+  namespace: ssa-nginx-controller-system
 spec:
-  # TODO(user): Add fields here
+  depSpec:
+    replicas: 3
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 30%
+        maxUnavailable: 30%
+    template:
+      spec:
+        containers:
+          - name: nginx
+            image: nginx:latest
+  cmdata:
+    default.conf: |
+      server {
+            listen 80 default_server;
+            listen [::]:80 default_server ipv6only=on;
+
+            root /usr/share/nginx/html;
+            index mod-index.html index.html;
+
+          server_name localhost;
+      }
+    mod-index.html: |
+      <!DOCTYPE html>
+      <html>
+      <head>
+      <title>Welcome to nginx!</title>
+      <style>
+      html { color-scheme: light dark; }
+      body { width: 35em; margin: 0 auto;
+      font-family: Tahoma, Verdana, Arial, sans-serif; }
+      </style>
+      </head>
+      <body>
+      <h1>Yeahhhhhhh Taniai!</h1>
+      <p>If you see this page, the nginx web server is successfully installed and
+      working. Further configuration is required.</p>
+
+      <p>For online documentation and support please refer to
+      <a href="http://nginx.org/">nginx.org</a>.<br/>
+      Commercial support is available at
+      <a href="http://nginx.com/">nginx.com</a>.</p>
+
+      <p><em>Thank you for using nginx.</em></p>
+      </body>
+      </html>
