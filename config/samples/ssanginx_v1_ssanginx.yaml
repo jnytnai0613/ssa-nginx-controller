@@ -23,7 +23,7 @@ spec:
             listen [::]:80 default_server ipv6only=on;
 
             root /usr/share/nginx/html;
-            index mod-index.html index.html;
+            index index.html index.htm mod-index.html;
 
           server_name localhost;
       }
@@ -31,7 +31,7 @@ spec:
       <!DOCTYPE html>
       <html>
       <head>
-      <title>Welcome to nginx!</title>
+      <title>Yeahhhhhhh!! Welcome to nginx!!</title>
       <style>
       html { color-scheme: light dark; }
       body { width: 35em; margin: 0 auto;
@@ -39,7 +39,7 @@ spec:
       </style>
       </head>
       <body>
-      <h1>Yeahhhhhhh Taniai!</h1>
+      <h1>Yeahhhhhhh!! Welcome to nginx!!</h1>
       <p>If you see this page, the nginx web server is successfully installed and
       working. Further configuration is required.</p>
 
