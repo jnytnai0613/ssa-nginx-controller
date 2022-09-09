@@ -24,6 +24,9 @@ import (
 
 	"github.com/go-logr/logr"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,7 +83,10 @@ func createOwnerReferences(ssanginx ssanginxv1.SSANginx, scheme *runtime.Scheme,
 }
 
 func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
-	var configmapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
+	var (
+		currConfigMap   corev1.ConfigMap
+		configmapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
+	)
 
 	configmapApplyConfig := corev1apply.ConfigMap("nginx", "ssa-nginx-controller-system").
 		WithData(ssanginx.Spec.CmData)
@@ -91,6 +97,20 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 		return err
 	}
 	configmapApplyConfig.WithOwnerReferences(owner)
+
+	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &currConfigMap)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	extractApplyConfig, err := corev1apply.ExtractConfigMap(&currConfigMap, fieldMgr)
+	if err != nil {
+		return err
+	}
+
+	if equality.Semantic.DeepEqual(configmapApplyConfig, extractApplyConfig) {
+		return nil
+	}
 
 	applied, err := configmapClient.Apply(ctx, configmapApplyConfig, metav1.ApplyOptions{
 		FieldManager: fieldMgr,
@@ -108,6 +128,7 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 
 func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
+		currDeployment   appsv1.Deployment
 		deploymentClient = kclientset.AppsV1().Deployments("ssa-nginx-controller-system")
 		labels           = map[string]string{"apps": "ssa-nginx"}
 		podTemplate      *corev1apply.PodTemplateSpecApplyConfiguration
@@ -133,6 +154,7 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 
 	podTemplate = ssanginx.Spec.DepSpec.Template
 	podTemplate.WithLabels(labels)
+
 	for i, _ := range podTemplate.Spec.Containers {
 		s := strings.Split(*podTemplate.Spec.Containers[i].Image, ":")
 		if s[0] == "nginx" {
@@ -173,6 +195,20 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 	}
 	deploymentApplyConfig.WithOwnerReferences(owner)
 
+	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &currDeployment)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	extractApplyConfig, err := appsv1apply.ExtractDeployment(&currDeployment, fieldMgr)
+	if err != nil {
+		return err
+	}
+
+	if equality.Semantic.DeepEqual(deploymentApplyConfig, extractApplyConfig) {
+		return nil
+	}
+
 	applied, err := deploymentClient.Apply(ctx, deploymentApplyConfig, metav1.ApplyOptions{
 		FieldManager: fieldMgr,
 		Force:        true,
@@ -191,7 +227,7 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=apps,resources=configmapss,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -227,5 +263,7 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ssanginxv1.SSANginx{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
