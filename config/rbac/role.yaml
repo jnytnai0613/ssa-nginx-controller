@@ -8,7 +8,7 @@ rules:
 - apiGroups:
   - apps
   resources:
-  - configmapss
+  - deployments
   verbs:
   - create
   - delete
@@ -18,9 +18,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - apps
+  - ""
   resources:
-  - deployments
+  - configmaps
   verbs:
   - create
   - delete
