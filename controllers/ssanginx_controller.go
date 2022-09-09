@@ -79,7 +79,7 @@ func createOwnerReferences(ssanginx ssanginxv1.SSANginx, scheme *runtime.Scheme,
 	return owner, nil
 }
 
-func (r *SSANginxReconciler) applyNginxConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
+func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var configmapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
 
 	configmapApplyConfig := corev1apply.ConfigMap("nginx", "ssa-nginx-controller-system").
@@ -106,7 +106,7 @@ func (r *SSANginxReconciler) applyNginxConfigMap(ctx context.Context, fieldMgr s
 	return nil
 }
 
-func (r *SSANginxReconciler) applyNginxDeployment(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
+func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
 		deploymentClient = kclientset.AppsV1().Deployments("ssa-nginx-controller-system")
 		labels           = map[string]string{"apps": "ssa-nginx"}
@@ -211,12 +211,12 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Create Configmap
 	// Generate default.conf and index.html
-	if err := r.applyNginxConfigMap(ctx, fieldMgr, log, ssanginx); err != nil {
+	if err := r.applyConfigMap(ctx, fieldMgr, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Create Deployment
-	if err := r.applyNginxDeployment(ctx, fieldMgr, log, ssanginx); err != nil {
+	if err := r.applyDeployment(ctx, fieldMgr, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
 
