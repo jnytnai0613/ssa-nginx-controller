@@ -92,7 +92,7 @@ func (r *SSANginxReconciler) applyNginxConfigMap(ctx context.Context, fieldMgr s
 	}
 	configmapApplyConfig.WithOwnerReferences(owner)
 
-	cmApplied, err := configmapClient.Apply(ctx, configmapApplyConfig, metav1.ApplyOptions{
+	applied, err := configmapClient.Apply(ctx, configmapApplyConfig, metav1.ApplyOptions{
 		FieldManager: fieldMgr,
 		Force:        true,
 	})
@@ -101,7 +101,7 @@ func (r *SSANginxReconciler) applyNginxConfigMap(ctx context.Context, fieldMgr s
 		return err
 	}
 
-	log.Info(fmt.Sprintf("Nginx Configmap Applied: %s", cmApplied.GetName()))
+	log.Info(fmt.Sprintf("Nginx Configmap Applied: %s", applied.GetName()))
 
 	return nil
 }
@@ -209,25 +209,16 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	////////////////////////////
 	// Create Configmap
-	////////////////////////////
+	// Generate default.conf and index.html
 	if err := r.applyNginxConfigMap(ctx, fieldMgr, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
-	////////////////////////////
-	// Create Configmap
-	////////////////////////////
 
-	////////////////////////////
 	// Create Deployment
-	////////////////////////////
 	if err := r.applyNginxDeployment(ctx, fieldMgr, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
-	////////////////////////////
-	// Create Deployment
-	////////////////////////////
 
 	return ctrl.Result{}, nil
 }
