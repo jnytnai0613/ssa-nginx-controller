@@ -84,7 +84,7 @@ func createOwnerReferences(ssanginx ssanginxv1.SSANginx, scheme *runtime.Scheme,
 
 func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
-		configmap       corev1.ConfigMap
+		currConfigMap   corev1.ConfigMap
 		configmapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
 	)
 
@@ -98,17 +98,17 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 	}
 	configmapApplyConfig.WithOwnerReferences(owner)
 
-	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &configmap)
+	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &currConfigMap)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 
-	currConfigMap, err := corev1apply.ExtractConfigMap(&configmap, fieldMgr)
+	extractApplyConfig, err := corev1apply.ExtractConfigMap(&currConfigMap, fieldMgr)
 	if err != nil {
 		return err
 	}
 
-	if equality.Semantic.DeepEqual(configmapApplyConfig, currConfigMap) {
+	if equality.Semantic.DeepEqual(configmapApplyConfig, extractApplyConfig) {
 		return nil
 	}
 
@@ -128,7 +128,7 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 
 func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
-		deployment       appsv1.Deployment
+		currDeployment   appsv1.Deployment
 		deploymentClient = kclientset.AppsV1().Deployments("ssa-nginx-controller-system")
 		labels           = map[string]string{"apps": "ssa-nginx"}
 		podTemplate      *corev1apply.PodTemplateSpecApplyConfiguration
@@ -195,17 +195,17 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 	}
 	deploymentApplyConfig.WithOwnerReferences(owner)
 
-	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &deployment)
+	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &currDeployment)
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
 
-	currDeployment, err := appsv1apply.ExtractDeployment(&deployment, fieldMgr)
+	extractApplyConfig, err := appsv1apply.ExtractDeployment(&currDeployment, fieldMgr)
 	if err != nil {
 		return err
 	}
 
-	if equality.Semantic.DeepEqual(deploymentApplyConfig, currDeployment) {
+	if equality.Semantic.DeepEqual(deploymentApplyConfig, extractApplyConfig) {
 		return nil
 	}
 
