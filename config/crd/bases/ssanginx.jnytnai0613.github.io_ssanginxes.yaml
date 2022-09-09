@@ -2143,6 +2143,8 @@ spec:
                             type: boolean
                           hostPID:
                             type: boolean
+                          hostUsers:
+                            type: boolean
                           hostname:
                             type: string
                           imagePullSecrets:
@@ -3072,12 +3074,24 @@ spec:
                                         type: string
                                       type: object
                                   type: object
+                                matchLabelKeys:
+                                  items:
+                                    type: string
+                                  type: array
                                 maxSkew:
                                   format: int32
                                   type: integer
                                 minDomains:
                                   format: int32
                                   type: integer
+                                nodeAffinityPolicy:
+                                  description: NodeInclusionPolicy defines the type
+                                    of node inclusion policy
+                                  type: string
+                                nodeTaintsPolicy:
+                                  description: NodeInclusionPolicy defines the type
+                                    of node inclusion policy
+                                  type: string
                                 topologyKey:
                                   type: string
                                 whenUnsatisfiable:
