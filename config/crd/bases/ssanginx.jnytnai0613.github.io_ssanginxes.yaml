@@ -35,11 +35,15 @@ spec:
           spec:
             description: SSANginxSpec defines the desired state of SSANginx
             properties:
-              cmdata:
+              configMapData:
                 additionalProperties:
                   type: string
                 type: object
-              depSpec:
+              configMapName:
+                type: string
+              deploymentName:
+                type: string
+              deploymentSpec:
                 description: DeploymentSpecApplyConfiguration represents an declarative
                   configuration of the DeploymentSpec type for use with apply.
                 properties:
@@ -3991,7 +3995,9 @@ spec:
                     type: object
                 type: object
             required:
-            - depSpec
+            - configMapName
+            - deploymentName
+            - deploymentSpec
             type: object
           status:
             description: SSANginxStatus defines the observed state of SSANginx
