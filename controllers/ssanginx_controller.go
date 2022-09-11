@@ -84,11 +84,11 @@ func createOwnerReferences(ssanginx ssanginxv1.SSANginx, scheme *runtime.Scheme,
 
 func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
-		configmapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
-		configmap       corev1.ConfigMap
+		configMap       corev1.ConfigMap
+		configMapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
 	)
 
-	configmapApplyConfig := corev1apply.ConfigMap(ssanginx.Spec.ConfigMapName, "ssa-nginx-controller-system").
+	nextConfigMapApplyConfig := corev1apply.ConfigMap(ssanginx.Spec.ConfigMapName, "ssa-nginx-controller-system").
 		WithData(ssanginx.Spec.ConfigMapData)
 
 	owner, err := createOwnerReferences(ssanginx, r.Scheme, log)
@@ -96,23 +96,23 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 		log.Error(err, "Unable create OwnerReference")
 		return err
 	}
-	configmapApplyConfig.WithOwnerReferences(owner)
+	nextConfigMapApplyConfig.WithOwnerReferences(owner)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: ssanginx.Spec.ConfigMapName}, &configmap); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: ssanginx.Spec.ConfigMapName}, &configMap); err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 	}
 
-	currConfigMap, err := corev1apply.ExtractConfigMap(&configmap, fieldMgr)
+	currConfigMapApplyConfig, err := corev1apply.ExtractConfigMap(&configMap, fieldMgr)
 	if err != nil {
 		return err
 	}
-	if equality.Semantic.DeepEqual(configmapApplyConfig, currConfigMap) {
+	if equality.Semantic.DeepEqual(currConfigMapApplyConfig, nextConfigMapApplyConfig) {
 		return nil
 	}
 
-	applied, err := configmapClient.Apply(ctx, configmapApplyConfig, metav1.ApplyOptions{
+	applied, err := configMapClient.Apply(ctx, nextConfigMapApplyConfig, metav1.ApplyOptions{
 		FieldManager: fieldMgr,
 		Force:        true,
 	})
@@ -134,20 +134,20 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 		podTemplate      *corev1apply.PodTemplateSpecApplyConfiguration
 	)
 
-	deploymentApplyConfig := appsv1apply.Deployment(ssanginx.Spec.DeploymentName, "ssa-nginx-controller-system").
+	nextDeploymentApplyConfig := appsv1apply.Deployment(ssanginx.Spec.DeploymentName, "ssa-nginx-controller-system").
 		WithSpec(appsv1apply.DeploymentSpec().
 			WithSelector(metav1apply.LabelSelector().
 				WithMatchLabels(labels)))
 
 	if ssanginx.Spec.DeploymentSpec.Replicas != nil {
 		replicas := *ssanginx.Spec.DeploymentSpec.Replicas
-		deploymentApplyConfig.Spec.WithReplicas(replicas)
+		nextDeploymentApplyConfig.Spec.WithReplicas(replicas)
 	}
 
 	if ssanginx.Spec.DeploymentSpec.Strategy != nil {
 		types := *ssanginx.Spec.DeploymentSpec.Strategy.Type
 		rollingUpdate := ssanginx.Spec.DeploymentSpec.Strategy.RollingUpdate
-		deploymentApplyConfig.Spec.WithStrategy(appsv1apply.DeploymentStrategy().
+		nextDeploymentApplyConfig.Spec.WithStrategy(appsv1apply.DeploymentStrategy().
 			WithType(types).
 			WithRollingUpdate(rollingUpdate))
 	}
@@ -186,14 +186,14 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 					WithKey("mod-index.html").
 					WithPath("mod-index.html"))))
 
-	deploymentApplyConfig.Spec.WithTemplate(podTemplate)
+	nextDeploymentApplyConfig.Spec.WithTemplate(podTemplate)
 
 	owner, err := createOwnerReferences(ssanginx, r.Scheme, log)
 	if err != nil {
 		log.Error(err, "Unable create OwnerReference")
 		return err
 	}
-	deploymentApplyConfig.WithOwnerReferences(owner)
+	nextDeploymentApplyConfig.WithOwnerReferences(owner)
 
 	if err := r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: ssanginx.Spec.DeploymentName}, &deployment); err != nil {
 		if !errors.IsNotFound(err) {
@@ -201,16 +201,15 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 		}
 	}
 
-	currDeployment, err := appsv1apply.ExtractDeployment(&deployment, fieldMgr)
+	currDeploymentApplyConfig, err := appsv1apply.ExtractDeployment(&deployment, fieldMgr)
 	if err != nil {
 		return err
 	}
-
-	if equality.Semantic.DeepEqual(deploymentApplyConfig, currDeployment) {
+	if equality.Semantic.DeepEqual(currDeploymentApplyConfig, nextDeploymentApplyConfig) {
 		return nil
 	}
 
-	applied, err := deploymentClient.Apply(ctx, deploymentApplyConfig, metav1.ApplyOptions{
+	applied, err := deploymentClient.Apply(ctx, nextDeploymentApplyConfig, metav1.ApplyOptions{
 		FieldManager: fieldMgr,
 		Force:        true,
 	})
