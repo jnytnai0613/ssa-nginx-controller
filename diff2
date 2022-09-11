@@ -84,12 +84,12 @@ func createOwnerReferences(ssanginx ssanginxv1.SSANginx, scheme *runtime.Scheme,
 
 func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
-		configmapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
 		configmap       corev1.ConfigMap
+		configmapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
 	)
 
-	configmapApplyConfig := corev1apply.ConfigMap(ssanginx.Spec.ConfigMapName, "ssa-nginx-controller-system").
-		WithData(ssanginx.Spec.ConfigMapData)
+	configmapApplyConfig := corev1apply.ConfigMap("nginx", "ssa-nginx-controller-system").
+		WithData(ssanginx.Spec.CmData)
 
 	owner, err := createOwnerReferences(ssanginx, r.Scheme, log)
 	if err != nil {
@@ -98,16 +98,16 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 	}
 	configmapApplyConfig.WithOwnerReferences(owner)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: ssanginx.Spec.ConfigMapName}, &configmap); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
+	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &configmap)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
 	}
 
 	currConfigMap, err := corev1apply.ExtractConfigMap(&configmap, fieldMgr)
 	if err != nil {
 		return err
 	}
+
 	if equality.Semantic.DeepEqual(configmapApplyConfig, currConfigMap) {
 		return nil
 	}
@@ -134,25 +134,25 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 		podTemplate      *corev1apply.PodTemplateSpecApplyConfiguration
 	)
 
-	deploymentApplyConfig := appsv1apply.Deployment(ssanginx.Spec.DeploymentName, "ssa-nginx-controller-system").
+	deploymentApplyConfig := appsv1apply.Deployment("nginx", "ssa-nginx-controller-system").
 		WithSpec(appsv1apply.DeploymentSpec().
 			WithSelector(metav1apply.LabelSelector().
 				WithMatchLabels(labels)))
 
-	if ssanginx.Spec.DeploymentSpec.Replicas != nil {
-		replicas := *ssanginx.Spec.DeploymentSpec.Replicas
+	if ssanginx.Spec.DepSpec.Replicas != nil {
+		replicas := *ssanginx.Spec.DepSpec.Replicas
 		deploymentApplyConfig.Spec.WithReplicas(replicas)
 	}
 
-	if ssanginx.Spec.DeploymentSpec.Strategy != nil {
-		types := *ssanginx.Spec.DeploymentSpec.Strategy.Type
-		rollingUpdate := ssanginx.Spec.DeploymentSpec.Strategy.RollingUpdate
+	if ssanginx.Spec.DepSpec.Strategy != nil {
+		types := *ssanginx.Spec.DepSpec.Strategy.Type
+		rollingUpdate := ssanginx.Spec.DepSpec.Strategy.RollingUpdate
 		deploymentApplyConfig.Spec.WithStrategy(appsv1apply.DeploymentStrategy().
 			WithType(types).
 			WithRollingUpdate(rollingUpdate))
 	}
 
-	podTemplate = ssanginx.Spec.DeploymentSpec.Template
+	podTemplate = ssanginx.Spec.DepSpec.Template
 	podTemplate.WithLabels(labels)
 
 	for i, _ := range podTemplate.Spec.Containers {
@@ -174,14 +174,14 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 		corev1apply.Volume().
 			WithName("conf").
 			WithConfigMap(corev1apply.ConfigMapVolumeSource().
-				WithName(ssanginx.Spec.ConfigMapName).
+				WithName("nginx").
 				WithItems(corev1apply.KeyToPath().
 					WithKey("default.conf").
 					WithPath("default.conf"))),
 		corev1apply.Volume().
 			WithName("index").
 			WithConfigMap(corev1apply.ConfigMapVolumeSource().
-				WithName(ssanginx.Spec.ConfigMapName).
+				WithName("nginx").
 				WithItems(corev1apply.KeyToPath().
 					WithKey("mod-index.html").
 					WithPath("mod-index.html"))))
@@ -195,10 +195,9 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 	}
 	deploymentApplyConfig.WithOwnerReferences(owner)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: ssanginx.Spec.DeploymentName}, &deployment); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
+	err = r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: "nginx"}, &deployment)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
 	}
 
 	currDeployment, err := appsv1apply.ExtractDeployment(&deployment, fieldMgr)
@@ -238,9 +237,12 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		ssanginx ssanginxv1.SSANginx
 	)
 
-	if err := r.Get(ctx, req.NamespacedName, &ssanginx); err != nil {
+	err := r.Get(ctx, req.NamespacedName, &ssanginx)
+	if errors.IsNotFound(err) {
+		return ctrl.Result{}, nil
+	} else if err != nil {
 		log.Error(err, "unable to fetch CR SSANginx")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, err
 	}
 
 	// Create Configmap
