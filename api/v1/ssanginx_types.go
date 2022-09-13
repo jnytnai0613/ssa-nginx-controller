@@ -40,8 +40,10 @@ func (c *DeploymentSpecApplyConfiguration) DeepCopy() *DeploymentSpecApplyConfig
 
 // SSANginxSpec defines the desired state of SSANginx
 type SSANginxSpec struct {
-	DepSpec *DeploymentSpecApplyConfiguration `json:"depSpec"`
-	CmData  map[string]string                 `json:"cmdata,omitempty"`
+	DeploymentName string                            `json:"deploymentName"`
+	DeploymentSpec *DeploymentSpecApplyConfiguration `json:"deploymentSpec"`
+	ConfigMapName  string                            `json:"configMapName"`
+	ConfigMapData  map[string]string                 `json:"configMapData,omitempty"`
 }
 
 // SSANginxStatus defines the observed state of SSANginx

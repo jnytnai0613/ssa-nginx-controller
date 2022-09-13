@@ -4,7 +4,8 @@ metadata:
   name: ssanginx-sample
   namespace: ssa-nginx-controller-system
 spec:
-  depSpec:
+  deploymentName: nginx
+  deploymentSpec:
     replicas: 3
     strategy:
       type: RollingUpdate
@@ -16,7 +17,8 @@ spec:
         containers:
           - name: nginx
             image: nginx:latest
-  cmdata:
+  configMapName: nginx
+  configMapData:
     default.conf: |
       server {
             listen 80 default_server;
