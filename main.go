@@ -95,11 +95,12 @@ func main() {
 	}
 
 	if err = (&controllers.SSANginxReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SSA-NGINX"),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("NGINX"),
+		Recorder: mgr.GetEventRecorderFor("nginx-controller"),
+		Scheme:   mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SSANginx")
+		setupLog.Error(err, "unable to create controller", "controller", "nginx-controller")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
