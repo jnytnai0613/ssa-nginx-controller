@@ -51,9 +51,8 @@ type SSANginxReconciler struct {
 }
 
 var (
-	configMapOwnerKey  = ".metadata.ownerReference.controller"
-	deploymentOwnerKey = ".metadata.ownerReference.controller"
-	kclientset         *kubernetes.Clientset
+	indexOwnerKey = ".metadata.ownerReference.name"
+	kclientset    *kubernetes.Clientset
 )
 
 func init() {
@@ -76,10 +75,10 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		deployments appsv1.DeploymentList
 	)
 
-	if err := r.List(ctx, &configMaps, client.InNamespace(ssanginx.GetNamespace()), client.MatchingFields(map[string]string{configMapOwnerKey: ssanginx.GetName()})); err != nil {
+	if err := r.List(ctx, &configMaps, client.InNamespace(ssanginx.GetNamespace()), client.MatchingFields(map[string]string{indexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
-	if err := r.List(ctx, &deployments, client.InNamespace(ssanginx.GetNamespace()), client.MatchingFields(map[string]string{deploymentOwnerKey: ssanginx.GetName()})); err != nil {
+	if err := r.List(ctx, &deployments, client.InNamespace(ssanginx.GetNamespace()), client.MatchingFields(map[string]string{indexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
 
@@ -398,7 +397,7 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	)
 
 	// add configMapOwnerKey index to configmap object which SSANginx resource owns
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ConfigMap{}, configMapOwnerKey, func(obj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ConfigMap{}, indexOwnerKey, func(obj client.Object) []string {
 		// grab the configmap object, extract the owner...
 		configMap := obj.(*corev1.ConfigMap)
 		owner := metav1.GetControllerOf(configMap)
@@ -416,7 +415,7 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	// add deploymentOwnerKey index to deployment object which SSANginx resource owns
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &appsv1.Deployment{}, deploymentOwnerKey, func(obj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &appsv1.Deployment{}, indexOwnerKey, func(obj client.Object) []string {
 		// grab the deployment object, extract the owner...
 		deployment := obj.(*appsv1.Deployment)
 		owner := metav1.GetControllerOf(deployment)
