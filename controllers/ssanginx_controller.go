@@ -40,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 
 	ssanginxv1 "github.com/jnytnai0613/ssa-nginx-controller/api/v1"
+	"github.com/jnytnai0613/ssa-nginx-controller/pkg/constants"
 )
 
 // SSANginxReconciler reconciles a SSANginx object
@@ -51,9 +52,7 @@ type SSANginxReconciler struct {
 }
 
 var (
-	configMapOwnerKey  = ".metadata.ownerReference.controller"
-	deploymentOwnerKey = ".metadata.ownerReference.controller"
-	kclientset         *kubernetes.Clientset
+	kclientset *kubernetes.Clientset
 )
 
 func init() {
@@ -76,10 +75,12 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		deployments appsv1.DeploymentList
 	)
 
-	if err := r.List(ctx, &configMaps, client.InNamespace(ssanginx.GetNamespace()), client.MatchingFields(map[string]string{configMapOwnerKey: ssanginx.GetName()})); err != nil {
+	if err := r.List(ctx, &configMaps, client.InNamespace(ssanginx.GetNamespace()),
+		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
-	if err := r.List(ctx, &deployments, client.InNamespace(ssanginx.GetNamespace()), client.MatchingFields(map[string]string{deploymentOwnerKey: ssanginx.GetName()})); err != nil {
+	if err := r.List(ctx, &deployments, client.InNamespace(ssanginx.GetNamespace()),
+		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
 
@@ -108,7 +109,6 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		}
 
 		if err := r.Delete(ctx, &deployment); err != nil {
-			log.Error(err, "failed to delete Deployment resource")
 			return err
 		}
 
@@ -118,6 +118,24 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 
 	return nil
 
+}
+
+func createInitContainers() []*corev1apply.ContainerApplyConfiguration {
+	var initContainers []*corev1apply.ContainerApplyConfiguration
+	i := corev1apply.Container().
+		WithName(constants.InitConatainerName).
+		WithImage(constants.InitConatainerImage).
+		WithCommand(
+			"sh",
+			"-c",
+			constants.InitCommand).
+		WithVolumeMounts(
+			corev1apply.VolumeMount().
+				WithName(constants.EmptyDirVolumeName).
+				WithMountPath(constants.InitContainerVolumeMountPath))
+	initContainers = append(initContainers, i)
+
+	return initContainers
 }
 
 func createOwnerReferences(log logr.Logger, ssanginx ssanginxv1.SSANginx, scheme *runtime.Scheme) (*metav1apply.OwnerReferenceApplyConfiguration, error) {
@@ -141,10 +159,10 @@ func createOwnerReferences(log logr.Logger, ssanginx ssanginxv1.SSANginx, scheme
 func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
 		configMap       corev1.ConfigMap
-		configMapClient = kclientset.CoreV1().ConfigMaps("ssa-nginx-controller-system")
+		configMapClient = kclientset.CoreV1().ConfigMaps(constants.Namespace)
 	)
 
-	nextConfigMapApplyConfig := corev1apply.ConfigMap(ssanginx.Spec.ConfigMapName, "ssa-nginx-controller-system").
+	nextConfigMapApplyConfig := corev1apply.ConfigMap(ssanginx.Spec.ConfigMapName, constants.Namespace).
 		WithData(ssanginx.Spec.ConfigMapData)
 
 	owner, err := createOwnerReferences(log, ssanginx, r.Scheme)
@@ -154,12 +172,14 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 	}
 	nextConfigMapApplyConfig.WithOwnerReferences(owner)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: ssanginx.Spec.ConfigMapName}, &configMap); err != nil {
+	// Difference Check at Client-Side
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ConfigMapName}, &configMap); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
 			return err
 		}
 	}
-
 	currConfigMapApplyConfig, err := corev1apply.ExtractConfigMap(&configMap, fieldMgr)
 	if err != nil {
 		return err
@@ -184,13 +204,35 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 
 func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
+		configmap        corev1.ConfigMap
 		deployment       appsv1.Deployment
-		deploymentClient = kclientset.AppsV1().Deployments("ssa-nginx-controller-system")
-		labels           = map[string]string{"apps": "ssa-nginx"}
-		podTemplate      *corev1apply.PodTemplateSpecApplyConfiguration
+		deploymentClient = kclientset.AppsV1().Deployments(constants.Namespace)
+		labels           = map[string]string{"apps": "nginx"}
+		indexKey         string
 	)
 
-	nextDeploymentApplyConfig := appsv1apply.Deployment(ssanginx.Spec.DeploymentName, "ssa-nginx-controller-system").
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ConfigMapName}, &configmap); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	for key := range configmap.Data {
+		if strings.Contains(key, "htm") {
+			indexKey = key
+		}
+	}
+
+	// It is possible that there is no Data in ConfigMap at this point.
+	// If Data does not exist, the function exits to retry.
+	if indexKey == "" {
+		log.Info("index key is empty")
+		return nil
+	}
+
+	nextDeploymentApplyConfig := appsv1apply.Deployment(ssanginx.Spec.DeploymentName, constants.Namespace).
 		WithSpec(appsv1apply.DeploymentSpec().
 			WithSelector(metav1apply.LabelSelector().
 				WithMatchLabels(labels)))
@@ -208,39 +250,51 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 			WithRollingUpdate(rollingUpdate))
 	}
 
-	podTemplate = ssanginx.Spec.DeploymentSpec.Template
+	podTemplate := ssanginx.Spec.DeploymentSpec.Template
 	podTemplate.WithLabels(labels)
+	initContainers := createInitContainers()
+	podTemplate.Spec.WithInitContainers(initContainers...)
 
 	for i, _ := range podTemplate.Spec.Containers {
 		s := strings.Split(*podTemplate.Spec.Containers[i].Image, ":")
-		if s[0] == "nginx" {
-			podTemplate.Spec.Containers[i].WithVolumeMounts(
-				corev1apply.VolumeMount().
-					WithName("conf").
-					WithMountPath("/etc/nginx/conf.d/"),
-				corev1apply.VolumeMount().
-					WithName("index").
-					WithMountPath("/usr/share/nginx/html/"))
-
+		if s[0] == constants.CompareImageName {
+			podTemplate.Spec.Containers[i].
+				WithCommand(
+					"bash",
+					"-c",
+					constants.ContainerCommand).
+				WithVolumeMounts(
+					corev1apply.VolumeMount().
+						WithName(constants.ConfVolumeName).
+						WithMountPath(constants.ConfVolumeMountPath),
+					corev1apply.VolumeMount().
+						WithName(constants.IndexVolumeName).
+						WithMountPath(constants.IndexVolumeMountPath),
+					corev1apply.VolumeMount().
+						WithName(constants.EmptyDirVolumeName).
+						WithMountPath(constants.InitContainerVolumeMountPath))
 			break
 		}
 	}
 
 	podTemplate.Spec.WithVolumes(
 		corev1apply.Volume().
-			WithName("conf").
+			WithName(constants.ConfVolumeName).
 			WithConfigMap(corev1apply.ConfigMapVolumeSource().
 				WithName(ssanginx.Spec.ConfigMapName).
 				WithItems(corev1apply.KeyToPath().
-					WithKey("default.conf").
-					WithPath("default.conf"))),
+					WithKey(constants.ConfVolumeKeyPath).
+					WithPath(constants.ConfVolumeKeyPath))),
 		corev1apply.Volume().
-			WithName("index").
+			WithName(constants.IndexVolumeName).
 			WithConfigMap(corev1apply.ConfigMapVolumeSource().
 				WithName(ssanginx.Spec.ConfigMapName).
 				WithItems(corev1apply.KeyToPath().
-					WithKey("mod-index.html").
-					WithPath("mod-index.html"))))
+					WithKey(indexKey).
+					WithPath(indexKey))),
+		corev1apply.Volume().
+			WithName(constants.EmptyDirVolumeName).
+			WithEmptyDir(nil))
 
 	nextDeploymentApplyConfig.Spec.WithTemplate(podTemplate)
 
@@ -251,12 +305,14 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 	}
 	nextDeploymentApplyConfig.WithOwnerReferences(owner)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: "ssa-nginx-controller-system", Name: ssanginx.Spec.DeploymentName}, &deployment); err != nil {
+	// Difference Check at Client-Side
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.DeploymentName}, &deployment); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
 			return err
 		}
 	}
-
 	currDeploymentApplyConfig, err := appsv1apply.ExtractDeployment(&deployment, fieldMgr)
 	if err != nil {
 		return err
@@ -288,7 +344,6 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var (
-		fieldMgr = "ssanginx-fieldmanager"
 		log      = r.Log.WithValues("ssanginx", req.NamespacedName)
 		ssanginx ssanginxv1.SSANginx
 	)
@@ -300,12 +355,12 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Create Configmap
 	// Generate default.conf and index.html
-	if err := r.applyConfigMap(ctx, fieldMgr, log, ssanginx); err != nil {
+	if err := r.applyConfigMap(ctx, constants.FieldManager, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Create Deployment
-	if err := r.applyDeployment(ctx, fieldMgr, log, ssanginx); err != nil {
+	if err := r.applyDeployment(ctx, constants.FieldManager, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -321,12 +376,12 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	var (
 		apiGVStr = ssanginxv1.GroupVersion.String()
 		ctx      = context.Background()
-		crKind   = "SSANginx"
+		crKind   = constants.CrKind
 	)
 
 	// add configMapOwnerKey index to configmap object which SSANginx resource owns
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ConfigMap{}, configMapOwnerKey, func(obj client.Object) []string {
-
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ConfigMap{}, constants.IndexOwnerKey, func(obj client.Object) []string {
+		// grab the configmap object, extract the owner...
 		configMap := obj.(*corev1.ConfigMap)
 		owner := metav1.GetControllerOf(configMap)
 		if owner == nil {
@@ -337,14 +392,13 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 
-		// ...and if so, return it
 		return []string{owner.Name}
 	}); err != nil {
 		return err
 	}
 
 	// add deploymentOwnerKey index to deployment object which SSANginx resource owns
-	if err := mgr.GetFieldIndexer().IndexField(ctx, &appsv1.Deployment{}, deploymentOwnerKey, func(obj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &appsv1.Deployment{}, constants.IndexOwnerKey, func(obj client.Object) []string {
 		// grab the deployment object, extract the owner...
 		deployment := obj.(*appsv1.Deployment)
 		owner := metav1.GetControllerOf(deployment)
