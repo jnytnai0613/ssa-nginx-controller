@@ -224,6 +224,9 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 			indexKey = key
 		}
 	}
+
+	// It is possible that there is no Data in ConfigMap at this point.
+	// If Data does not exist, the function exits to retry.
 	if indexKey == "" {
 		log.Info("index key is empty")
 		return nil
