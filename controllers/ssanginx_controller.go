@@ -51,9 +51,7 @@ type SSANginxReconciler struct {
 	Scheme   *runtime.Scheme
 }
 
-var (
-	kclientset *kubernetes.Clientset
-)
+var kclientset *kubernetes.Clientset
 
 func init() {
 	kclientset = getClient()
@@ -376,7 +374,6 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	var (
 		apiGVStr = ssanginxv1.GroupVersion.String()
 		ctx      = context.Background()
-		crKind   = constants.CrKind
 	)
 
 	// add configMapOwnerKey index to configmap object which SSANginx resource owns
@@ -388,7 +385,7 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 
-		if owner.APIVersion != apiGVStr || owner.Kind != crKind {
+		if owner.APIVersion != apiGVStr || owner.Kind != constants.CrKind {
 			return nil
 		}
 
@@ -406,7 +403,7 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 
-		if owner.APIVersion != apiGVStr || owner.Kind != crKind {
+		if owner.APIVersion != apiGVStr || owner.Kind != constants.CrKind {
 			return nil
 		}
 
