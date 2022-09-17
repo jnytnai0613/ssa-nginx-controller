@@ -59,7 +59,7 @@ const (
 
 // volume mountpath
 const (
-	ConfVolumeMountPath          = "/etc/nginx/conf.d/"
-	IndexVolumeMountPath         = "/usr/share/nginx/html/"
-	InitContainerVolumeMountPath = "/tmp/"
+	ConfVolumeMountPath     = "/etc/nginx/conf.d/"
+	EmptyDirVolumeMountPath = "/tmp/"
+	IndexVolumeMountPath    = "/usr/share/nginx/html/"
 )

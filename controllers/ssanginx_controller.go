@@ -130,7 +130,7 @@ func createInitContainers() []*corev1apply.ContainerApplyConfiguration {
 		WithVolumeMounts(
 			corev1apply.VolumeMount().
 				WithName(constants.EmptyDirVolumeName).
-				WithMountPath(constants.InitContainerVolumeMountPath))
+				WithMountPath(constants.EmptyDirVolumeMountPath))
 	initContainers = append(initContainers, i)
 
 	return initContainers
@@ -270,7 +270,7 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 						WithMountPath(constants.IndexVolumeMountPath),
 					corev1apply.VolumeMount().
 						WithName(constants.EmptyDirVolumeName).
-						WithMountPath(constants.InitContainerVolumeMountPath))
+						WithMountPath(constants.EmptyDirVolumeMountPath))
 			break
 		}
 	}
@@ -376,7 +376,7 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		ctx      = context.Background()
 	)
 
-	// add configMapOwnerKey index to configmap object which SSANginx resource owns
+	// add IndexOwnerKey index to configmap object which SSANginx resource owns
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.ConfigMap{}, constants.IndexOwnerKey, func(obj client.Object) []string {
 		// grab the configmap object, extract the owner...
 		configMap := obj.(*corev1.ConfigMap)
@@ -394,7 +394,7 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	// add deploymentOwnerKey index to deployment object which SSANginx resource owns
+	// add IndexOwnerKey index to deployment object which SSANginx resource owns
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &appsv1.Deployment{}, constants.IndexOwnerKey, func(obj client.Object) []string {
 		// grab the deployment object, extract the owner...
 		deployment := obj.(*appsv1.Deployment)
