@@ -71,6 +71,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 	var (
 		configMaps  corev1.ConfigMapList
 		deployments appsv1.DeploymentList
+		services    corev1.ServiceList
 	)
 
 	if err := r.List(ctx, &configMaps, client.InNamespace(ssanginx.GetNamespace()),
@@ -78,6 +79,10 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		return err
 	}
 	if err := r.List(ctx, &deployments, client.InNamespace(ssanginx.GetNamespace()),
+		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
+		return err
+	}
+	if err := r.List(ctx, &services, client.InNamespace(ssanginx.GetNamespace()),
 		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
@@ -112,6 +117,19 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 
 		log.Info(fmt.Sprintf("delete Deployment resource: %s", deployment.GetName()))
 		r.Recorder.Eventf(&deployment, corev1.EventTypeNormal, "Deleted", "Deleted Deployment %q", deployment.GetName())
+	}
+
+	for _, service := range services.Items {
+		if service.Name == ssanginx.Spec.ServiceName {
+			continue
+		}
+
+		if err := r.Delete(ctx, &service); err != nil {
+			return err
+		}
+
+		log.Info(fmt.Sprintf("delete Service resource: %s", service.GetName()))
+		r.Recorder.Eventf(&service, corev1.EventTypeNormal, "Deleted", "Service Deployment %q", service.GetName())
 	}
 
 	return nil
@@ -333,11 +351,61 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 	return nil
 }
 
+func (r *SSANginxReconciler) applyService(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
+	var (
+		service       corev1.Service
+		serviceClient = kclientset.CoreV1().Services(constants.Namespace)
+		labels        = map[string]string{"apps": "nginx"}
+	)
+
+	nextServiceApplyConfig := corev1apply.Service(ssanginx.Spec.ServiceName, constants.Namespace).
+		WithSpec((*corev1apply.ServiceSpecApplyConfiguration)(ssanginx.Spec.ServiceSpec).
+			WithSelector(labels))
+
+	owner, err := createOwnerReferences(log, ssanginx, r.Scheme)
+	if err != nil {
+		log.Error(err, "Unable create OwnerReference")
+		return err
+	}
+	nextServiceApplyConfig.WithOwnerReferences(owner)
+
+	// Difference Check at Client-Side
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ServiceName}, &service); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	}
+	currServiceApplyConfig, err := corev1apply.ExtractService(&service, fieldMgr)
+	if err != nil {
+		return err
+	}
+	if equality.Semantic.DeepEqual(currServiceApplyConfig, nextServiceApplyConfig) {
+		return nil
+	}
+
+	applied, err := serviceClient.Apply(ctx, nextServiceApplyConfig, metav1.ApplyOptions{
+		FieldManager: fieldMgr,
+		Force:        true,
+	})
+	if err != nil {
+		log.Error(err, "unable to apply")
+		return err
+	}
+
+	log.Info(fmt.Sprintf("Nginx Service Applied: %s", applied.GetName()))
+
+	return nil
+
+}
+
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes/finalizers,verbs=update
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -359,6 +427,11 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Create Deployment
 	if err := r.applyDeployment(ctx, constants.FieldManager, log, ssanginx); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Create Service
+	if err := r.applyService(ctx, constants.FieldManager, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -411,10 +484,28 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}); err != nil {
 		return err
 	}
+	// add IndexOwnerKey index to deployment object which SSANginx resource owns
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Service{}, constants.IndexOwnerKey, func(obj client.Object) []string {
+		// grab the service object, extract the owner...
+		service := obj.(*corev1.Service)
+		owner := metav1.GetControllerOf(service)
+		if owner == nil {
+			return nil
+		}
+
+		if owner.APIVersion != apiGVStr || owner.Kind != constants.CrKind {
+			return nil
+		}
+
+		return []string{owner.Name}
+	}); err != nil {
+		return err
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ssanginxv1.SSANginx{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }

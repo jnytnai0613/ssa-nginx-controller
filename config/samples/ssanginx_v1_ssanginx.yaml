@@ -53,3 +53,13 @@ spec:
       <p><em>Thank you for using nginx.</em></p>
       </body>
       </html>
+  serviceName: nginx
+  #############################################################################
+  # Selector is automatically assigned by the controller and is not required.
+  #############################################################################
+  serviceSpec:
+    type: ClusterIP
+    ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
