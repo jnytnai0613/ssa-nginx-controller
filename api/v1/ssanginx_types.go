@@ -22,10 +22,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	appsv1apply "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1apply "k8s.io/client-go/applyconfigurations/core/v1"
+	networkv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 )
 
 type DeploymentSpecApplyConfiguration appsv1apply.DeploymentSpecApplyConfiguration
 type ServiceSpecApplyConfiguration corev1apply.ServiceSpecApplyConfiguration
+type IngressSpecApplyConfiguration networkv1apply.IngressSpecApplyConfiguration
 
 func (c *DeploymentSpecApplyConfiguration) DeepCopy() *DeploymentSpecApplyConfiguration {
 	out := new(DeploymentSpecApplyConfiguration)
@@ -53,6 +55,19 @@ func (c *ServiceSpecApplyConfiguration) DeepCopy() *ServiceSpecApplyConfiguratio
 	return out
 }
 
+func (c *IngressSpecApplyConfiguration) DeepCopy() *IngressSpecApplyConfiguration {
+	out := new(IngressSpecApplyConfiguration)
+	bytes, err := json.Marshal(c)
+	if err != nil {
+		panic("Failed to marshal")
+	}
+	err = json.Unmarshal(bytes, out)
+	if err != nil {
+		panic("Failed to unmarshal")
+	}
+	return out
+}
+
 // SSANginxSpec defines the desired state of SSANginx
 type SSANginxSpec struct {
 	DeploymentName string                            `json:"deploymentName"`
@@ -61,6 +76,8 @@ type SSANginxSpec struct {
 	ConfigMapData  map[string]string                 `json:"configMapData,omitempty"`
 	ServiceName    string                            `json:"serviceName"`
 	ServiceSpec    *ServiceSpecApplyConfiguration    `json:"serviceSpec"`
+	IngressName    string                            `json:"ingressName"`
+	IngressSpec    *IngressSpecApplyConfiguration    `json:"ingressSpec"`
 }
 
 // SSANginxStatus defines the observed state of SSANginx

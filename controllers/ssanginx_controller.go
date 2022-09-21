@@ -26,6 +26,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,7 @@ import (
 	appsv1apply "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1apply "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1apply "k8s.io/client-go/applyconfigurations/meta/v1"
+	networkv1apply "k8s.io/client-go/applyconfigurations/networking/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -71,6 +73,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 	var (
 		configMaps  corev1.ConfigMapList
 		deployments appsv1.DeploymentList
+		ingresses   networkv1.IngressList
 		services    corev1.ServiceList
 	)
 
@@ -83,6 +86,10 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		return err
 	}
 	if err := r.List(ctx, &services, client.InNamespace(ssanginx.GetNamespace()),
+		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
+		return err
+	}
+	if err := r.List(ctx, &ingresses, client.InNamespace(ssanginx.GetNamespace()),
 		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
@@ -129,7 +136,20 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		}
 
 		log.Info(fmt.Sprintf("delete Service resource: %s", service.GetName()))
-		r.Recorder.Eventf(&service, corev1.EventTypeNormal, "Deleted", "Service Deployment %q", service.GetName())
+		r.Recorder.Eventf(&service, corev1.EventTypeNormal, "Deleted", "Deleted Service %q", service.GetName())
+	}
+
+	for _, ingress := range ingresses.Items {
+		if ingress.Name == ssanginx.Spec.IngressName {
+			continue
+		}
+
+		if err := r.Delete(ctx, &ingress); err != nil {
+			return err
+		}
+
+		log.Info(fmt.Sprintf("delete Ingress resource: %s", ingress.GetName()))
+		r.Recorder.Eventf(&ingress, corev1.EventTypeNormal, "Deleted", "Deleted Ingress %q", ingress.GetName())
 	}
 
 	return nil
@@ -397,7 +417,55 @@ func (r *SSANginxReconciler) applyService(ctx context.Context, fieldMgr string, 
 	log.Info(fmt.Sprintf("Nginx Service Applied: %s", applied.GetName()))
 
 	return nil
+}
 
+func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
+	var (
+		annotateRewriteTarget = map[string]string{"nginx.ingress.kubernetes.io/rewrite-target": "/"}
+		ingress               networkv1.Ingress
+		ingressClient         = kclientset.NetworkingV1().Ingresses(constants.Namespace)
+	)
+
+	nextIngressApplyConfig := networkv1apply.Ingress(ssanginx.Spec.IngressName, constants.Namespace).
+		WithAnnotations(annotateRewriteTarget).
+		WithSpec((*networkv1apply.IngressSpecApplyConfiguration)(ssanginx.Spec.IngressSpec).
+			WithIngressClassName(constants.IngressClassName))
+
+	owner, err := createOwnerReferences(log, ssanginx, r.Scheme)
+	if err != nil {
+		log.Error(err, "Unable create OwnerReference")
+		return err
+	}
+	nextIngressApplyConfig.WithOwnerReferences(owner)
+
+	// Difference Check at Client-Side
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.IngressName}, &ingress); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	}
+	currIngressApplyConfig, err := networkv1apply.ExtractIngress(&ingress, fieldMgr)
+	if err != nil {
+		return err
+	}
+	if equality.Semantic.DeepEqual(currIngressApplyConfig, nextIngressApplyConfig) {
+		return nil
+	}
+
+	applied, err := ingressClient.Apply(ctx, nextIngressApplyConfig, metav1.ApplyOptions{
+		FieldManager: fieldMgr,
+		Force:        true,
+	})
+	if err != nil {
+		log.Error(err, "unable to apply")
+		return err
+	}
+
+	log.Info(fmt.Sprintf("Nginx Ingress Applied: %s", applied.GetName()))
+
+	return nil
 }
 
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes,verbs=get;list;watch;create;update;patch;delete
@@ -406,6 +474,7 @@ func (r *SSANginxReconciler) applyService(ctx context.Context, fieldMgr string, 
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -432,6 +501,11 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// Create Service
 	if err := r.applyService(ctx, constants.FieldManager, log, ssanginx); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Create Ingress
+	if err := r.applyIngress(ctx, constants.FieldManager, log, ssanginx); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -484,11 +558,30 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}); err != nil {
 		return err
 	}
-	// add IndexOwnerKey index to deployment object which SSANginx resource owns
+
+	// add IndexOwnerKey index to service object which SSANginx resource owns
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Service{}, constants.IndexOwnerKey, func(obj client.Object) []string {
 		// grab the service object, extract the owner...
 		service := obj.(*corev1.Service)
 		owner := metav1.GetControllerOf(service)
+		if owner == nil {
+			return nil
+		}
+
+		if owner.APIVersion != apiGVStr || owner.Kind != constants.CrKind {
+			return nil
+		}
+
+		return []string{owner.Name}
+	}); err != nil {
+		return err
+	}
+
+	// add IndexOwnerKey index to ingress object which SSANginx resource owns
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &networkv1.Ingress{}, constants.IndexOwnerKey, func(obj client.Object) []string {
+		// grab the service object, extract the owner...
+		ingress := obj.(*networkv1.Ingress)
+		owner := metav1.GetControllerOf(ingress)
 		if owner == nil {
 			return nil
 		}
@@ -507,5 +600,6 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
+		Owns(&networkv1.Ingress{}).
 		Complete(r)
 }

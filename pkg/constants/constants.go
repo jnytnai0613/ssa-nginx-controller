@@ -63,3 +63,8 @@ const (
 	EmptyDirVolumeMountPath = "/tmp/"
 	IndexVolumeMountPath    = "/usr/share/nginx/html/"
 )
+
+// Ingress Info
+const (
+	IngressClassName = "nginx"
+)
