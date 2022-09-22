@@ -64,6 +64,12 @@ const (
 	IndexVolumeMountPath    = "/usr/share/nginx/html/"
 )
 
+// Secret Info
+const (
+	IngressSecretName = "ca-secret"
+	ClientSecretName  = "cli-secret"
+)
+
 // Ingress Info
 const (
 	IngressClassName = "nginx"

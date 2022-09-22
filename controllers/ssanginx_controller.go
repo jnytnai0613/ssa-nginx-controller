@@ -43,6 +43,7 @@ import (
 
 	ssanginxv1 "github.com/jnytnai0613/ssa-nginx-controller/api/v1"
 	"github.com/jnytnai0613/ssa-nginx-controller/pkg/constants"
+	"github.com/jnytnai0613/ssa-nginx-controller/pkg/pki"
 )
 
 // SSANginxReconciler reconciles a SSANginx object
@@ -95,7 +96,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 	}
 
 	for _, configmap := range configMaps.Items {
-		if configmap.Name == ssanginx.Spec.ConfigMapName {
+		if configmap.GetName() == ssanginx.Spec.ConfigMapName {
 			continue
 		}
 
@@ -114,7 +115,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 	}
 
 	for _, deployment := range deployments.Items {
-		if deployment.Name == ssanginx.Spec.DeploymentName {
+		if deployment.GetName() == ssanginx.Spec.DeploymentName {
 			continue
 		}
 
@@ -127,7 +128,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 	}
 
 	for _, service := range services.Items {
-		if service.Name == ssanginx.Spec.ServiceName {
+		if service.GetName() == ssanginx.Spec.ServiceName {
 			continue
 		}
 
@@ -140,7 +141,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 	}
 
 	for _, ingress := range ingresses.Items {
-		if ingress.Name == ssanginx.Spec.IngressName {
+		if ingress.GetName() == ssanginx.Spec.IngressName {
 			continue
 		}
 
@@ -174,6 +175,7 @@ func createInitContainers() []*corev1apply.ContainerApplyConfiguration {
 	return initContainers
 }
 
+// Create OwnerReference with CR as Owner
 func createOwnerReferences(log logr.Logger, ssanginx ssanginxv1.SSANginx, scheme *runtime.Scheme) (*metav1apply.OwnerReferenceApplyConfiguration, error) {
 	gvk, err := apiutil.GVKForObject(&ssanginx, scheme)
 	if err != nil {
@@ -422,6 +424,8 @@ func (r *SSANginxReconciler) applyService(ctx context.Context, fieldMgr string, 
 func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
 		annotateRewriteTarget = map[string]string{"nginx.ingress.kubernetes.io/rewrite-target": "/"}
+		annotateVerifyClient  = map[string]string{"nginx.ingress.kubernetes.io/auth-tls-verify-client": "on"}
+		annotateTlsSecret     = map[string]string{"nginx.ingress.kubernetes.io/auth-tls-secret": fmt.Sprintf("%s/%s", constants.Namespace, constants.IngressSecretName)}
 		ingress               networkv1.Ingress
 		ingressClient         = kclientset.NetworkingV1().Ingresses(constants.Namespace)
 	)
@@ -430,6 +434,26 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 		WithAnnotations(annotateRewriteTarget).
 		WithSpec((*networkv1apply.IngressSpecApplyConfiguration)(ssanginx.Spec.IngressSpec).
 			WithIngressClassName(constants.IngressClassName))
+
+	if ssanginx.Spec.IngressSecureEnabled {
+		if err := r.applyIngressSecret(ctx, constants.FieldManager, log, ssanginx); err != nil {
+			log.Error(err, "Unable create Ingress Secret")
+			return err
+		}
+
+		if err := r.applyClientSecret(ctx, constants.FieldManager, log, ssanginx); err != nil {
+			log.Error(err, "Unable create Client Secret")
+			return err
+		}
+
+		nextIngressApplyConfig.
+			WithAnnotations(annotateVerifyClient).
+			WithAnnotations(annotateTlsSecret).
+			Spec.
+			WithTLS(networkv1apply.IngressTLS().
+				WithHosts(*ssanginx.Spec.IngressSpec.Rules[0].Host).
+				WithSecretName(constants.IngressSecretName))
+	}
 
 	owner, err := createOwnerReferences(log, ssanginx, r.Scheme)
 	if err != nil {
@@ -468,6 +492,115 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 	return nil
 }
 
+func (r *SSANginxReconciler) applyIngressSecret(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
+	var (
+		secret       corev1.Secret
+		secretClient = kclientset.CoreV1().Secrets(constants.Namespace)
+	)
+
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: constants.IngressSecretName}, &secret); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	if len(secret.GetName()) > 0 {
+		return nil
+	}
+
+	caCrt, _, err := pki.CreateCaCrt()
+	if err != nil {
+		log.Error(err, "Unable create CA Certificates")
+		return err
+	}
+
+	svrCrt, svrKey, err := pki.CreateSvrCrt(ssanginx)
+	if err != nil {
+		log.Error(err, "Unable create Server Certificates")
+		return err
+	}
+
+	secData := map[string][]byte{
+		"tls.crt": svrCrt,
+		"tls.key": svrKey,
+		"ca.crt":  caCrt,
+	}
+
+	nextIngressSecretApplyConfig := corev1apply.Secret(constants.IngressSecretName, constants.Namespace).
+		WithData(secData)
+
+	owner, err := createOwnerReferences(log, ssanginx, r.Scheme)
+	if err != nil {
+		log.Error(err, "Unable create OwnerReference")
+		return err
+	}
+	nextIngressSecretApplyConfig.WithOwnerReferences(owner)
+
+	applied, err := secretClient.Apply(ctx, nextIngressSecretApplyConfig, metav1.ApplyOptions{
+		FieldManager: fieldMgr,
+		Force:        true,
+	})
+	if err != nil {
+		log.Error(err, "unable to apply")
+		return err
+	}
+
+	log.Info(fmt.Sprintf("Nginx Ingress Applied: %s", applied.GetName()))
+
+	return nil
+}
+
+func (r *SSANginxReconciler) applyClientSecret(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
+	var (
+		secret       corev1.Secret
+		secretClient = kclientset.CoreV1().Secrets(constants.Namespace)
+	)
+
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: constants.ClientSecretName}, &secret); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	}
+
+	if len(secret.GetName()) > 0 {
+		return nil
+	}
+
+	cliCrt, cliKey, err := pki.CreateClientCrt()
+	if err != nil {
+		log.Error(err, "Unable create Client Certificates")
+		return err
+	}
+
+	secData := map[string][]byte{"client.crt": cliCrt, "client.key": cliKey}
+	nextClientSecretApplyConfig := corev1apply.Secret(constants.ClientSecretName, constants.Namespace).
+		WithData(secData)
+
+	owner, err := createOwnerReferences(log, ssanginx, r.Scheme)
+	if err != nil {
+		log.Error(err, "Unable create OwnerReference")
+		return err
+	}
+	nextClientSecretApplyConfig.WithOwnerReferences(owner)
+
+	applied, err := secretClient.Apply(ctx, nextClientSecretApplyConfig, metav1.ApplyOptions{
+		FieldManager: fieldMgr,
+		Force:        true,
+	})
+	if err != nil {
+		log.Error(err, "unable to apply")
+		return err
+	}
+
+	log.Info(fmt.Sprintf("Nginx Ingress Applied: %s", applied.GetName()))
+
+	return nil
+}
+
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=ssanginx.jnytnai0613.github.io,resources=ssanginxes/finalizers,verbs=update
@@ -475,6 +608,7 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.13.0/pkg/reconcile
 func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

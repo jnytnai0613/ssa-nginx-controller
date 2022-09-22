@@ -3996,6 +3996,8 @@ spec:
                 type: object
               ingressName:
                 type: string
+              ingressSecureEnabled:
+                type: boolean
               ingressSpec:
                 description: IngressSpecApplyConfiguration represents an declarative
                   configuration of the IngressSpec type for use with apply.
@@ -4232,6 +4234,7 @@ spec:
             - deploymentName
             - deploymentSpec
             - ingressName
+            - ingressSecureEnabled
             - ingressSpec
             - serviceName
             - serviceSpec

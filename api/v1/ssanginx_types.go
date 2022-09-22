@@ -70,14 +70,15 @@ func (c *IngressSpecApplyConfiguration) DeepCopy() *IngressSpecApplyConfiguratio
 
 // SSANginxSpec defines the desired state of SSANginx
 type SSANginxSpec struct {
-	DeploymentName string                            `json:"deploymentName"`
-	DeploymentSpec *DeploymentSpecApplyConfiguration `json:"deploymentSpec"`
-	ConfigMapName  string                            `json:"configMapName"`
-	ConfigMapData  map[string]string                 `json:"configMapData,omitempty"`
-	ServiceName    string                            `json:"serviceName"`
-	ServiceSpec    *ServiceSpecApplyConfiguration    `json:"serviceSpec"`
-	IngressName    string                            `json:"ingressName"`
-	IngressSpec    *IngressSpecApplyConfiguration    `json:"ingressSpec"`
+	DeploymentName       string                            `json:"deploymentName"`
+	DeploymentSpec       *DeploymentSpecApplyConfiguration `json:"deploymentSpec"`
+	ConfigMapName        string                            `json:"configMapName"`
+	ConfigMapData        map[string]string                 `json:"configMapData,omitempty"`
+	ServiceName          string                            `json:"serviceName"`
+	ServiceSpec          *ServiceSpecApplyConfiguration    `json:"serviceSpec"`
+	IngressName          string                            `json:"ingressName"`
+	IngressSpec          *IngressSpecApplyConfiguration    `json:"ingressSpec"`
+	IngressSecureEnabled bool                              `json:"ingressSecureEnabled"`
 }
 
 // SSANginxStatus defines the observed state of SSANginx
