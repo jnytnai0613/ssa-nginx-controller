@@ -576,7 +576,11 @@ func (r *SSANginxReconciler) applyClientSecret(ctx context.Context, fieldMgr str
 		return err
 	}
 
-	secData := map[string][]byte{"client.crt": cliCrt, "client.key": cliKey}
+	secData := map[string][]byte{
+		"client.crt": cliCrt,
+		"client.key": cliKey,
+	}
+
 	nextClientSecretApplyConfig := corev1apply.Secret(constants.ClientSecretName, constants.Namespace).
 		WithData(secData)
 
