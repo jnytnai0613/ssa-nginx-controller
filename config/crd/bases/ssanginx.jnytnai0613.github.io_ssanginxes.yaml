@@ -3994,10 +3994,250 @@ spec:
                         type: object
                     type: object
                 type: object
+              ingressName:
+                type: string
+              ingressSecureEnabled:
+                type: boolean
+              ingressSpec:
+                description: IngressSpecApplyConfiguration represents an declarative
+                  configuration of the IngressSpec type for use with apply.
+                properties:
+                  defaultBackend:
+                    description: IngressBackendApplyConfiguration represents an declarative
+                      configuration of the IngressBackend type for use with apply.
+                    properties:
+                      resource:
+                        description: TypedLocalObjectReferenceApplyConfiguration represents
+                          an declarative configuration of the TypedLocalObjectReference
+                          type for use with apply.
+                        properties:
+                          apiGroup:
+                            type: string
+                          kind:
+                            type: string
+                          name:
+                            type: string
+                        type: object
+                      service:
+                        description: IngressServiceBackendApplyConfiguration represents
+                          an declarative configuration of the IngressServiceBackend
+                          type for use with apply.
+                        properties:
+                          name:
+                            type: string
+                          port:
+                            description: ServiceBackendPortApplyConfiguration represents
+                              an declarative configuration of the ServiceBackendPort
+                              type for use with apply.
+                            properties:
+                              name:
+                                type: string
+                              number:
+                                format: int32
+                                type: integer
+                            type: object
+                        type: object
+                    type: object
+                  ingressClassName:
+                    type: string
+                  rules:
+                    items:
+                      description: IngressRuleApplyConfiguration represents an declarative
+                        configuration of the IngressRule type for use with apply.
+                      properties:
+                        host:
+                          type: string
+                        http:
+                          description: HTTPIngressRuleValueApplyConfiguration represents
+                            an declarative configuration of the HTTPIngressRuleValue
+                            type for use with apply.
+                          properties:
+                            paths:
+                              items:
+                                description: HTTPIngressPathApplyConfiguration represents
+                                  an declarative configuration of the HTTPIngressPath
+                                  type for use with apply.
+                                properties:
+                                  backend:
+                                    description: IngressBackendApplyConfiguration
+                                      represents an declarative configuration of the
+                                      IngressBackend type for use with apply.
+                                    properties:
+                                      resource:
+                                        description: TypedLocalObjectReferenceApplyConfiguration
+                                          represents an declarative configuration
+                                          of the TypedLocalObjectReference type for
+                                          use with apply.
+                                        properties:
+                                          apiGroup:
+                                            type: string
+                                          kind:
+                                            type: string
+                                          name:
+                                            type: string
+                                        type: object
+                                      service:
+                                        description: IngressServiceBackendApplyConfiguration
+                                          represents an declarative configuration
+                                          of the IngressServiceBackend type for use
+                                          with apply.
+                                        properties:
+                                          name:
+                                            type: string
+                                          port:
+                                            description: ServiceBackendPortApplyConfiguration
+                                              represents an declarative configuration
+                                              of the ServiceBackendPort type for use
+                                              with apply.
+                                            properties:
+                                              name:
+                                                type: string
+                                              number:
+                                                format: int32
+                                                type: integer
+                                            type: object
+                                        type: object
+                                    type: object
+                                  path:
+                                    type: string
+                                  pathType:
+                                    description: PathType represents the type of path
+                                      referred to by a HTTPIngressPath.
+                                    type: string
+                                type: object
+                              type: array
+                          type: object
+                      type: object
+                    type: array
+                  tls:
+                    items:
+                      description: IngressTLSApplyConfiguration represents an declarative
+                        configuration of the IngressTLS type for use with apply.
+                      properties:
+                        hosts:
+                          items:
+                            type: string
+                          type: array
+                        secretName:
+                          type: string
+                      type: object
+                    type: array
+                type: object
+              serviceName:
+                type: string
+              serviceSpec:
+                description: ServiceSpecApplyConfiguration represents an declarative
+                  configuration of the ServiceSpec type for use with apply.
+                properties:
+                  allocateLoadBalancerNodePorts:
+                    type: boolean
+                  clusterIP:
+                    type: string
+                  clusterIPs:
+                    items:
+                      type: string
+                    type: array
+                  externalIPs:
+                    items:
+                      type: string
+                    type: array
+                  externalName:
+                    type: string
+                  externalTrafficPolicy:
+                    description: ServiceExternalTrafficPolicyType describes how nodes
+                      distribute service traffic they receive on one of the Service's
+                      "externally-facing" addresses (NodePorts, ExternalIPs, and LoadBalancer
+                      IPs).
+                    type: string
+                  healthCheckNodePort:
+                    format: int32
+                    type: integer
+                  internalTrafficPolicy:
+                    description: ServiceInternalTrafficPolicyType describes how nodes
+                      distribute service traffic they receive on the ClusterIP.
+                    type: string
+                  ipFamilies:
+                    items:
+                      description: IPFamily represents the IP Family (IPv4 or IPv6).
+                        This type is used to express the family of an IP expressed
+                        by a type (e.g. service.spec.ipFamilies).
+                      type: string
+                    type: array
+                  ipFamilyPolicy:
+                    description: IPFamilyPolicy represents the dual-stack-ness requested
+                      or required by a Service
+                    type: string
+                  loadBalancerClass:
+                    type: string
+                  loadBalancerIP:
+                    type: string
+                  loadBalancerSourceRanges:
+                    items:
+                      type: string
+                    type: array
+                  ports:
+                    items:
+                      description: ServicePortApplyConfiguration represents an declarative
+                        configuration of the ServicePort type for use with apply.
+                      properties:
+                        appProtocol:
+                          type: string
+                        name:
+                          type: string
+                        nodePort:
+                          format: int32
+                          type: integer
+                        port:
+                          format: int32
+                          type: integer
+                        protocol:
+                          default: TCP
+                          type: string
+                        targetPort:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
+                      type: object
+                    type: array
+                  publishNotReadyAddresses:
+                    type: boolean
+                  selector:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  sessionAffinity:
+                    description: Session Affinity Type string
+                    type: string
+                  sessionAffinityConfig:
+                    description: SessionAffinityConfigApplyConfiguration represents
+                      an declarative configuration of the SessionAffinityConfig type
+                      for use with apply.
+                    properties:
+                      clientIP:
+                        description: ClientIPConfigApplyConfiguration represents an
+                          declarative configuration of the ClientIPConfig type for
+                          use with apply.
+                        properties:
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                    type: object
+                  type:
+                    description: Service Type string describes ingress methods for
+                      a service
+                    type: string
+                type: object
             required:
             - configMapName
             - deploymentName
             - deploymentSpec
+            - ingressName
+            - ingressSecureEnabled
+            - ingressSpec
+            - serviceName
+            - serviceSpec
             type: object
           status:
             description: SSANginxStatus defines the observed state of SSANginx

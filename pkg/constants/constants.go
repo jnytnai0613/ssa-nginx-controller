@@ -59,7 +59,18 @@ const (
 
 // volume mountpath
 const (
-	ConfVolumeMountPath          = "/etc/nginx/conf.d/"
-	InitContainerVolumeMountPath = "/tmp/"
-	IndexVolumeMountPath         = "/usr/share/nginx/html/"
+	ConfVolumeMountPath     = "/etc/nginx/conf.d/"
+	EmptyDirVolumeMountPath = "/tmp/"
+	IndexVolumeMountPath    = "/usr/share/nginx/html/"
+)
+
+// Secret Info
+const (
+	IngressSecretName = "ca-secret"
+	ClientSecretName  = "cli-secret"
+)
+
+// Ingress Info
+const (
+	IngressClassName = "nginx"
 )

@@ -53,3 +53,27 @@ spec:
       <p><em>Thank you for using nginx.</em></p>
       </body>
       </html>
+  serviceName: nginx
+  #############################################################################
+  # Selector is automatically assigned by the controller and is not required.
+  #############################################################################
+  serviceSpec:
+    type: ClusterIP
+    ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  ingressName: nginx
+  ingressSpec:
+    rules:
+    - host: nginx.example.com
+      http:
+        paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: nginx
+              port:
+                number: 80
+  ingressSecureEnabled: true
