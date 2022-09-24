@@ -76,7 +76,7 @@ func CreateSvrCrt(ssanginx ssanginxv1.SSANginx) ([]byte, []byte, error) {
 	}
 	publicSvrKey := privateSvrKey.Public()
 
-	subjectSsl := pkix.Name{
+	subjectSvr := pkix.Name{
 		CommonName:         "server",
 		OrganizationalUnit: []string{"Example Org Unit"},
 		Organization:       []string{"Example Org"},
@@ -85,7 +85,7 @@ func CreateSvrCrt(ssanginx ssanginxv1.SSANginx) ([]byte, []byte, error) {
 
 	svrTempl := &x509.Certificate{
 		SerialNumber: big.NewInt(123),
-		Subject:      subjectSsl,
+		Subject:      subjectSvr,
 		NotAfter:     time.Date(2031, 12, 31, 0, 0, 0, 0, time.UTC),
 		NotBefore:    time.Now(),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
