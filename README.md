@@ -56,8 +56,10 @@ However, renaming of default.conf is not supported.
 | serviceName    | string             | true          |
 
 ### .spec.serviceSpec
-All are required.  
-However, selectors are automatically assigned by the controller and are not required.
+The serviceSpec field is required.  
+However, selectors are automatically assigned by the controller and are not required.  
+Check the following reference for a description of the serviceSpec field.  
+https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/
 
 ### .spec.ingressName
 | Name           | Type               | Required      |
@@ -65,10 +67,25 @@ However, selectors are automatically assigned by the controller and are not requ
 | ingressName    | string             | true          |
 
 ### .spec.ingressSpec
-All are required.  
-However, if TLS settings are to be made, the field does not need to be added, as it will be set automatically by setting ingressSecureEnabled to true, as described below.
+The ingressSpec field is required. 
+However, if TLS settings are to be made, the field does not need to be added, as it will be set automatically by setting ingressSecureEnabled to true, as described below.  
+Check the following reference for a description of the ingressSpec field.  
+https://kubernetes.io/docs/reference/kubernetes-api/service-resources/ingress-v1/
 
-### yaml example
+### .spec.ingressSecureEnabled
+| Name                 | Type               | Required      |
+| -------------------- | ------------------ | ------------- |
+| ingressSecureEnabled | string             | true          |
+
+By setting ingressSecureEnabled to true, the following fields are automatically added to the Ingress resource. Also, the Secret resource ca-secret is automatically created, containing the CA certificate, the server certificate, and the private key for the server certificate.  
+```yaml
+tls:
+- hosts:
+  - test-nginx.example.com
+  secretName: ca-secret
+````
+
+## yaml example
 ```yaml
 apiVersion: ssanginx.jnytnai0613.github.io/v1
 kind: SSANginx
@@ -143,6 +160,8 @@ spec:
                 number: 80
   ingressSecureEnabled: true
 ```
+
+**NOTE:** Currently, renaming and field modification of each resource is supported, but modification of the Ingress host field when ingressSecureEnabled = true is not supported.
 
 ## Getting Started
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.  
