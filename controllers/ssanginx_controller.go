@@ -547,7 +547,7 @@ func (r *SSANginxReconciler) applyIngressSecret(ctx context.Context, fieldMgr st
 		return err
 	}
 
-	log.Info(fmt.Sprintf("Nginx Ingress Applied: %s", applied.GetName()))
+	log.Info(fmt.Sprintf("Nginx Server Certificates Secret Applied: %s", applied.GetName()))
 
 	return nil
 }
@@ -600,7 +600,7 @@ func (r *SSANginxReconciler) applyClientSecret(ctx context.Context, fieldMgr str
 		return err
 	}
 
-	log.Info(fmt.Sprintf("Nginx Ingress Applied: %s", applied.GetName()))
+	log.Info(fmt.Sprintf("Nginx Client Certificates Secret Applied: %s", applied.GetName()))
 
 	return nil
 }

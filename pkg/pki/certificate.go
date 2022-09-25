@@ -1,14 +1,11 @@
 package pki
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-
-	//"log"
 	"math/big"
 	"time"
 
@@ -54,19 +51,13 @@ func CreateCaCrt() ([]byte, []byte, error) {
 	}
 
 	//Convert to ASN.1 PEM encoded form
-	caCrt := new(bytes.Buffer)
-	if err = pem.Encode(caCrt, &pem.Block{Type: "CERTIFICATE", Bytes: caCertificate}); err != nil {
-		return nil, nil, err
-	}
+	caCrt := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCertificate})
 
 	derCaPrivateKey := x509.MarshalPKCS1PrivateKey(privateCaKey)
 
-	caKey := new(bytes.Buffer)
-	if err = pem.Encode(caKey, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: derCaPrivateKey}); err != nil {
-		return nil, nil, err
-	}
+	caKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: derCaPrivateKey})
 
-	return caCrt.Bytes(), caKey.Bytes(), nil
+	return caCrt, caKey, nil
 }
 
 func CreateSvrCrt(ssanginx ssanginxv1.SSANginx) ([]byte, []byte, error) {
@@ -76,7 +67,7 @@ func CreateSvrCrt(ssanginx ssanginxv1.SSANginx) ([]byte, []byte, error) {
 	}
 	publicSvrKey := privateSvrKey.Public()
 
-	subjectSsl := pkix.Name{
+	subjectSvr := pkix.Name{
 		CommonName:         "server",
 		OrganizationalUnit: []string{"Example Org Unit"},
 		Organization:       []string{"Example Org"},
@@ -85,7 +76,7 @@ func CreateSvrCrt(ssanginx ssanginxv1.SSANginx) ([]byte, []byte, error) {
 
 	svrTempl := &x509.Certificate{
 		SerialNumber: big.NewInt(123),
-		Subject:      subjectSsl,
+		Subject:      subjectSvr,
 		NotAfter:     time.Date(2031, 12, 31, 0, 0, 0, 0, time.UTC),
 		NotBefore:    time.Now(),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
@@ -93,26 +84,20 @@ func CreateSvrCrt(ssanginx ssanginxv1.SSANginx) ([]byte, []byte, error) {
 		DNSNames:     []string{*ssanginx.Spec.IngressSpec.Rules[0].Host},
 	}
 
-	//SSL Certificate
-	derSslCertificate, err := x509.CreateCertificate(rand.Reader, svrTempl, caTempl, publicSvrKey, privateCaKey)
+	//Server Certificate
+	derSvrCertificate, err := x509.CreateCertificate(rand.Reader, svrTempl, caTempl, publicSvrKey, privateCaKey)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	//Convert to ASN.1 PEM encoded form
-	sslCrt := new(bytes.Buffer)
-	if err = pem.Encode(sslCrt, &pem.Block{Type: "CERTIFICATE", Bytes: derSslCertificate}); err != nil {
-		return nil, nil, err
-	}
+	svrCrt := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derSvrCertificate})
 
-	derPrivateSslKey := x509.MarshalPKCS1PrivateKey(privateSvrKey)
+	derPrivateSvrKey := x509.MarshalPKCS1PrivateKey(privateSvrKey)
 
-	sslKey := new(bytes.Buffer)
-	if err = pem.Encode(sslKey, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: derPrivateSslKey}); err != nil {
-		return nil, nil, err
-	}
+	svrKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: derPrivateSvrKey})
 
-	return sslCrt.Bytes(), sslKey.Bytes(), nil
+	return svrCrt, svrKey, nil
 }
 
 func CreateClientCrt() ([]byte, []byte, error) {
@@ -122,7 +107,6 @@ func CreateClientCrt() ([]byte, []byte, error) {
 	}
 	publicClientKey := privateClientKey.Public()
 
-	//Client Certificate
 	subjectClient := pkix.Name{
 		CommonName:         "client",
 		OrganizationalUnit: []string{"Example Org Unit"},
@@ -139,23 +123,18 @@ func CreateClientCrt() ([]byte, []byte, error) {
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
 
+	// Client Certificate
 	derClientCertificate, err := x509.CreateCertificate(rand.Reader, cliTempl, caTempl, publicClientKey, privateCaKey)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	//Convert to ASN.1 PEM encoded form
-	cliCrt := new(bytes.Buffer)
-	if err = pem.Encode(cliCrt, &pem.Block{Type: "CERTIFICATE", Bytes: derClientCertificate}); err != nil {
-		return nil, nil, err
-	}
+	// Convert to ASN.1 PEM encoded form
+	cliCrt := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derClientCertificate})
 
 	derClientPrivateKey := x509.MarshalPKCS1PrivateKey(privateClientKey)
 
-	cliKey := new(bytes.Buffer)
-	if err = pem.Encode(cliKey, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: derClientPrivateKey}); err != nil {
-		return nil, nil, err
-	}
+	cliKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: derClientPrivateKey})
 
-	return cliCrt.Bytes(), cliKey.Bytes(), nil
+	return cliCrt, cliKey, nil
 }
