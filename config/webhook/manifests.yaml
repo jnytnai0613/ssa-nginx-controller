@@ -1,0 +1,27 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ssanginx-jnytnai0613-github-io-v1-ssanginx
+  failurePolicy: Fail
+  name: vssanginx.kb.io
+  rules:
+  - apiGroups:
+    - ssanginx.jnytnai0613.github.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - ssanginxes
+  sideEffects: None
