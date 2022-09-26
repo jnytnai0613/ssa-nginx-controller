@@ -11,6 +11,8 @@ Automate the following operations
    - Ingress: external access to the Service
    - Secret: Data contains CA certificate, server certificate and private key required for SSL termination of Ingress
    - Secret: Client certificate and private key required for access to Ingress in data
+- Change Resource Name
+- Change resource definition
 - Automatic reload when default.conf is changed (monitored by inotifywait)
 
 ## Description to each field of CR
@@ -44,8 +46,8 @@ https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#P
 ### .spec.configMapData
 | Name           | Type               | Required      |
 | -------------- | ------------------ | ------------- |
-| default.conf   | string             | true          |
-| index.html     | string             | true          |
+| default.conf   | map[string]string  | true          |
+| index.html     | map[string]string  | true          |
 
 index.hmtl is mod-index.html by default. The name can be changed.  
 However, renaming of default.conf is not supported.
@@ -75,7 +77,7 @@ https://kubernetes.io/docs/reference/kubernetes-api/service-resources/ingress-v1
 ### .spec.ingressSecureEnabled
 | Name                 | Type               | Required      |
 | -------------------- | ------------------ | ------------- |
-| ingressSecureEnabled | string             | true          |
+| ingressSecureEnabled | bool               | true          |
 
 By setting ingressSecureEnabled to true, the following fields are automatically added to the Ingress resource. Also, the Secret resource ca-secret is automatically created, containing the CA certificate, the server certificate, and the private key for the server certificate.  
 ```yaml
