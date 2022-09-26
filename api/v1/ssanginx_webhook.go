@@ -84,7 +84,6 @@ func (r *SSANginx) validateIngressServicePort() *field.Error {
 	return nil
 }
 
-//https://github.com/govargo/foo-controller-kubebuilder/blob/admission_webhook/api/v1alpha1/foo_webhook.go
 func (r *SSANginx) validateIngress() error {
 	var allErrs field.ErrorList
 	gvk, err := apiutil.GVKForObject(r, newScheme)
