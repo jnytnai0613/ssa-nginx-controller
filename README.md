@@ -16,77 +16,7 @@ Automate the following operations
 - Change resource definition
 - Automatic reload when default.conf is changed (monitored by inotifywait)
 
-## Description to each field of CR
-The CR yaml file is located in the config/samples directory.
-
-### .spec.deploymentSpec
-| Name       | Type               | Required      |
-| ---------- | ------------------ | ------------- |
-| replicas   | int32              | false         |
-| strategy   | DeploymentStrategy | false         |
-
-Other fields cannot be specified.　  
-Check the following reference for a description of the strategy field.  
-https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/deployment-v1/#DeploymentSpec
-
-
-### .spec.deploymentSpec.template.spec.conatiners
-| Name       | Type               | Required      |
-| ---------- | ------------------ | ------------- |
-| name       | string             | false         |
-| image      | string             | true          |
-
-The other fields are options.See the following reference for possible fields.  
-https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec
-
-### .spec.configmapName
-| Name           | Type               | Required      |
-| -------------- | ------------------ | ------------- |
-| configmapName  | string             | true          |
-
-### .spec.configMapData
-| Name           | Type               | Required      |
-| -------------- | ------------------ | ------------- |
-| default.conf   | map[string]string  | true          |
-| index.html     | map[string]string  | true          |
-
-index.hmtl is mod-index.html by default. The name can be changed.  
-However, renaming of default.conf is not supported.
-
-### .spec.serviceName
-| Name           | Type               | Required      |
-| -------------- | ------------------ | ------------- |
-| serviceName    | string             | true          |
-
-### .spec.serviceSpec
-The serviceSpec field is required.  
-However, selectors are automatically assigned by the controller and are not required.  
-Check the following reference for a description of the serviceSpec field.  
-https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/
-
-### .spec.ingressName
-| Name           | Type               | Required      |
-| -------------- | ------------------ | ------------- |
-| ingressName    | string             | true          |
-
-### .spec.ingressSpec
-The ingressSpec field is required. 
-However, if TLS settings are to be made, the field does not need to be added, as it will be set automatically by setting ingressSecureEnabled to true, as described below.  
-Check the following reference for a description of the ingressSpec field.  
-https://kubernetes.io/docs/reference/kubernetes-api/service-resources/ingress-v1/
-
-### .spec.ingressSecureEnabled
-| Name                 | Type               | Required      |
-| -------------------- | ------------------ | ------------- |
-| ingressSecureEnabled | bool               | true          |
-
-By setting ingressSecureEnabled to true, the following fields are automatically added to the Ingress resource. Also, the Secret resource ca-secret is automatically created, containing the CA certificate, the server certificate, and the private key for the server certificate.  
-```yaml
-tls:
-- hosts:
-  - test-nginx.example.com
-  secretName: ca-secret
-````
+**NOTE:** Currently, renaming and field modification of each resource is supported, but modification of the Ingress host field when ingressSecureEnabled = true is not supported.
 
 ## yaml example
 ```yaml
@@ -164,7 +94,77 @@ spec:
   ingressSecureEnabled: true
 ```
 
-**NOTE:** Currently, renaming and field modification of each resource is supported, but modification of the Ingress host field when ingressSecureEnabled = true is not supported.
+## Description to each field of CR
+The CR yaml file is located in the config/samples directory.
+
+### .spec.deploymentSpec
+| Name       | Type               | Required      |
+| ---------- | ------------------ | ------------- |
+| replicas   | int32              | false         |
+| strategy   | DeploymentStrategy | false         |
+
+Other fields cannot be specified.　  
+Check the following reference for a description of the strategy field.  
+https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/deployment-v1/#DeploymentSpec
+
+
+### .spec.deploymentSpec.template.spec.conatiners
+| Name       | Type               | Required      |
+| ---------- | ------------------ | ------------- |
+| name       | string             | false         |
+| image      | string             | true          |
+
+The other fields are options.See the following reference for possible fields.  
+https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec
+
+### .spec.configmapName
+| Name           | Type               | Required      |
+| -------------- | ------------------ | ------------- |
+| configmapName  | string             | true          |
+
+### .spec.configMapData
+| Name           | Type               | Required      |
+| -------------- | ------------------ | ------------- |
+| default.conf   | map[string]string  | true          |
+| index.html     | map[string]string  | true          |
+
+index.hmtl is mod-index.html by default. The name can be changed.  
+However, renaming of default.conf is not supported.
+
+### .spec.serviceName
+| Name           | Type               | Required      |
+| -------------- | ------------------ | ------------- |
+| serviceName    | string             | true          |
+
+### .spec.serviceSpec
+The serviceSpec field is required.  
+However, selectors are automatically assigned by the controller and are not required.  
+Check the following reference for a description of the serviceSpec field.  
+https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/
+
+### .spec.ingressName
+| Name           | Type               | Required      |
+| -------------- | ------------------ | ------------- |
+| ingressName    | string             | true          |
+
+### .spec.ingressSpec
+The ingressSpec field is required. 
+However, if TLS settings are to be made, the field does not need to be added, as it will be set automatically by setting ingressSecureEnabled to true, as described below.  
+Check the following reference for a description of the ingressSpec field.  
+https://kubernetes.io/docs/reference/kubernetes-api/service-resources/ingress-v1/
+
+### .spec.ingressSecureEnabled
+| Name                 | Type               | Required      |
+| -------------------- | ------------------ | ------------- |
+| ingressSecureEnabled | bool               | true          |
+
+By setting ingressSecureEnabled to true, the following fields are automatically added to the Ingress resource. Also, the Secret resource ca-secret is automatically created, containing the CA certificate, the server certificate, and the private key for the server certificate.  
+```yaml
+tls:
+- hosts:
+  - test-nginx.example.com
+  secretName: ca-secret
+````
 
 ## SSL Termination for Ingress
 The following Secret is automatically created by setting the .spec.ingressSecureEnabled field in CustomResource to true.
