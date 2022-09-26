@@ -12,6 +12,7 @@ Automate the following operations
    - Secret: Data contains CA certificate, server certificate and private key required for SSL termination of Ingress
    - Secret: Client certificate and private key required for access to Ingress in data
 - Change Resource Name
+- Remove old Resource after renaming
 - Change resource definition
 - Automatic reload when default.conf is changed (monitored by inotifywait)
 
