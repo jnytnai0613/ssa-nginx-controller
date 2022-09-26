@@ -30,7 +30,7 @@ EOT
 chmod 500 /tmp/run-nginx.sh
 cat << EOT > /tmp/auto-reload-nginx.sh
 oldcksum=\` + "`" + `cksum /etc/nginx/conf.d/default.conf\` + "`" + `
-inotifywait -e modify,move,create,delete -mr --timefmt '%d/%m/%y %H:%M' --format '%T' /etc/nginx/conf.d/ | \
+inotifywait -e modify,move,create,delete -mr --timefmt '%Y/%m/%d %H:%M:%S' --format '%T' /etc/nginx/conf.d/ | \
 while read date time; do
   newcksum=\` + "`" + `cksum /etc/nginx/conf.d/default.conf\` + "`" + `
   if [ "\${newcksum}" != "\${oldcksum}" ]; then
