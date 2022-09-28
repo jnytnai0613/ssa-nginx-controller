@@ -428,6 +428,7 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 		annotateTlsSecret     = map[string]string{"nginx.ingress.kubernetes.io/auth-tls-secret": fmt.Sprintf("%s/%s", constants.Namespace, constants.IngressSecretName)}
 		ingress               networkv1.Ingress
 		ingressClient         = kclientset.NetworkingV1().Ingresses(constants.Namespace)
+		secrets               corev1.SecretList
 	)
 
 	nextIngressApplyConfig := networkv1apply.Ingress(ssanginx.Spec.IngressName, constants.Namespace).
@@ -435,7 +436,35 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 		WithSpec((*networkv1apply.IngressSpecApplyConfiguration)(ssanginx.Spec.IngressSpec).
 			WithIngressClassName(constants.IngressClassName))
 
+	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.IngressName}, &ingress); err != nil {
+		// If the resource does not exist, create it.
+		// Therefore, Not Found errors are ignored.
+		if !errors.IsNotFound(err) {
+			return err
+		}
+	}
+
 	if ssanginx.Spec.IngressSecureEnabled {
+		// Re-create Secret if 'spec.tls[].hosts[]' has changed
+		if len(ingress.GetName()) > 0 {
+			if err := r.List(ctx, &secrets, client.InNamespace(ssanginx.GetNamespace()),
+				client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
+				return err
+			}
+
+			ih := ingress.Spec.TLS[0].Hosts[0]
+			sh := *ssanginx.Spec.IngressSpec.Rules[0].Host
+			if ih != sh {
+				for _, secret := range secrets.Items {
+					if err := r.Delete(ctx, &secret); err != nil {
+						return err
+					}
+					log.Info(fmt.Sprintf("delete Secret resource: %s", secret.GetName()))
+					r.Recorder.Eventf(&secret, corev1.EventTypeNormal, "Deleted", "Deleted Secret %q", secret.GetName())
+				}
+			}
+		}
+
 		if err := r.applyIngressSecret(ctx, constants.FieldManager, log, ssanginx); err != nil {
 			log.Error(err, "Unable create Ingress Secret")
 			return err
@@ -463,13 +492,6 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 	nextIngressApplyConfig.WithOwnerReferences(owner)
 
 	// Difference Check at Client-Side
-	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.IngressName}, &ingress); err != nil {
-		// If the resource does not exist, create it.
-		// Therefore, Not Found errors are ignored.
-		if !errors.IsNotFound(err) {
-			return err
-		}
-	}
 	currIngressApplyConfig, err := networkv1apply.ExtractIngress(&ingress, fieldMgr)
 	if err != nil {
 		return err
@@ -717,9 +739,27 @@ func (r *SSANginxReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	// add IndexOwnerKey index to ingress object which SSANginx resource owns
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &networkv1.Ingress{}, constants.IndexOwnerKey, func(obj client.Object) []string {
-		// grab the service object, extract the owner...
+		// grab the ingress object, extract the owner...
 		ingress := obj.(*networkv1.Ingress)
 		owner := metav1.GetControllerOf(ingress)
+		if owner == nil {
+			return nil
+		}
+
+		if owner.APIVersion != apiGVStr || owner.Kind != constants.CrKind {
+			return nil
+		}
+
+		return []string{owner.Name}
+	}); err != nil {
+		return err
+	}
+
+	// add IndexOwnerKey index to secret object which SSANginx resource owns
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &corev1.Secret{}, constants.IndexOwnerKey, func(obj client.Object) []string {
+		// grab the secret object, extract the owner...
+		secret := obj.(*corev1.Secret)
+		owner := metav1.GetControllerOf(secret)
 		if owner == nil {
 			return nil
 		}
