@@ -225,6 +225,14 @@ Since the -v option is given to curl, the CN specified in certificate.go can be 
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.  
 **Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
 
+### Prerequisite
+- The software listed in the following URL must be installed in advance
+  - https://book.kubebuilder.io/quick-start.html#prerequisites
+  - https://cert-manager.io/docs/installation/#default-static-install
+  - if not already installed
+    - make 
+    - gcc
+
 ### Running on the cluster
 1. Build and push your image to the location specified by `IMG`:
 	
