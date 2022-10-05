@@ -229,6 +229,7 @@ You’ll need a Kubernetes cluster to run against. You can use [KIND](https://si
 - The software listed in the following URL must be installed in advance
   - https://book.kubebuilder.io/quick-start.html#prerequisites
   - https://cert-manager.io/docs/installation/#default-static-install
+  - https://kubernetes.github.io/ingress-nginx/deploy/
   - if not already installed
     - make 
     - gcc
