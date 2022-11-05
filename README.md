@@ -1,6 +1,6 @@
 # ssa-nginx-controller
 ## Description
-A controller that automates Nginx deployment, operations, and connection settings.
+A Kubernetes Custom Controller that automates Nginx deployment, operations, and connection settings.
 
 ## Automation of NGINX server operations
 Automate the following operations
