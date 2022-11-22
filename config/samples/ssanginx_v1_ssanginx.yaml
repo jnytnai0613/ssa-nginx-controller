@@ -76,4 +76,4 @@ spec:
               name: nginx
               port:
                 number: 80
-  ingressSecureEnabled: false
+  ingressSecureEnabled: true
