@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"log"
 	"os"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -39,8 +41,9 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	kclientset *kubernetes.Clientset
+	scheme     = runtime.NewScheme()
+	setupLog   = ctrl.Log.WithName("setup")
 )
 
 func init() {
@@ -48,6 +51,18 @@ func init() {
 
 	utilruntime.Must(ssanginxv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+
+	kclientset = getClientset()
+}
+
+func getClientset() *kubernetes.Clientset {
+	kubeconfig := ctrl.GetConfigOrDie()
+	kclientset, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return kclientset
 }
 
 func main() {
@@ -95,10 +110,11 @@ func main() {
 	}
 
 	if err = (&controllers.SSANginxReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("NGINX"),
-		Recorder: mgr.GetEventRecorderFor("nginx-controller"),
-		Scheme:   mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Clientset: kclientset,
+		Log:       ctrl.Log.WithName("controllers").WithName("NGINX"),
+		Recorder:  mgr.GetEventRecorderFor("nginx-controller"),
+		Scheme:    mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "nginx-controller")
 		os.Exit(1)
