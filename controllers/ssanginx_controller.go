@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -49,25 +48,10 @@ import (
 // SSANginxReconciler reconciles a SSANginx object
 type SSANginxReconciler struct {
 	client.Client
+	*kubernetes.Clientset
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
-}
-
-var kclientset *kubernetes.Clientset
-
-func init() {
-	kclientset = getClient()
-}
-
-func getClient() *kubernetes.Clientset {
-	kubeconfig := ctrl.GetConfigOrDie()
-	kclientset, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return kclientset
 }
 
 func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
@@ -78,19 +62,19 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		services    corev1.ServiceList
 	)
 
-	if err := r.List(ctx, &configMaps, client.InNamespace(ssanginx.GetNamespace()),
+	if err := r.Client.List(ctx, &configMaps, client.InNamespace(ssanginx.GetNamespace()),
 		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
-	if err := r.List(ctx, &deployments, client.InNamespace(ssanginx.GetNamespace()),
+	if err := r.Client.List(ctx, &deployments, client.InNamespace(ssanginx.GetNamespace()),
 		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
-	if err := r.List(ctx, &services, client.InNamespace(ssanginx.GetNamespace()),
+	if err := r.Client.List(ctx, &services, client.InNamespace(ssanginx.GetNamespace()),
 		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
-	if err := r.List(ctx, &ingresses, client.InNamespace(ssanginx.GetNamespace()),
+	if err := r.Client.List(ctx, &ingresses, client.InNamespace(ssanginx.GetNamespace()),
 		client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 		return err
 	}
@@ -99,8 +83,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 		if configmap.GetName() == ssanginx.Spec.ConfigMapName {
 			continue
 		}
-
-		if err := r.Delete(ctx, &configmap); err != nil {
+		if err := r.Client.Delete(ctx, &configmap); err != nil {
 			// If ConfigMap is renamed, this function may be called
 			// almost simultaneously because the Manager detects changes
 			// in ConfigMap and Deployment (since Configmap is mounted).
@@ -119,7 +102,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 			continue
 		}
 
-		if err := r.Delete(ctx, &deployment); err != nil {
+		if err := r.Client.Delete(ctx, &deployment); err != nil {
 			return err
 		}
 
@@ -132,7 +115,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 			continue
 		}
 
-		if err := r.Delete(ctx, &service); err != nil {
+		if err := r.Client.Delete(ctx, &service); err != nil {
 			return err
 		}
 
@@ -145,7 +128,7 @@ func (r *SSANginxReconciler) deleteOwnedResources(ctx context.Context, log logr.
 			continue
 		}
 
-		if err := r.Delete(ctx, &ingress); err != nil {
+		if err := r.Client.Delete(ctx, &ingress); err != nil {
 			return err
 		}
 
@@ -197,7 +180,7 @@ func createOwnerReferences(log logr.Logger, ssanginx ssanginxv1.SSANginx, scheme
 func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
 		configMap       corev1.ConfigMap
-		configMapClient = kclientset.CoreV1().ConfigMaps(constants.Namespace)
+		configMapClient = r.Clientset.CoreV1().ConfigMaps(constants.Namespace)
 	)
 
 	nextConfigMapApplyConfig := corev1apply.ConfigMap(ssanginx.Spec.ConfigMapName, constants.Namespace).
@@ -211,7 +194,7 @@ func (r *SSANginxReconciler) applyConfigMap(ctx context.Context, fieldMgr string
 	nextConfigMapApplyConfig.WithOwnerReferences(owner)
 
 	// Difference Check at Client-Side
-	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ConfigMapName}, &configMap); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ConfigMapName}, &configMap); err != nil {
 		// If the resource does not exist, create it.
 		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
@@ -244,12 +227,12 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 	var (
 		configmap        corev1.ConfigMap
 		deployment       appsv1.Deployment
-		deploymentClient = kclientset.AppsV1().Deployments(constants.Namespace)
+		deploymentClient = r.Clientset.AppsV1().Deployments(constants.Namespace)
 		labels           = map[string]string{"apps": "nginx"}
 		indexKey         string
 	)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ConfigMapName}, &configmap); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ConfigMapName}, &configmap); err != nil {
 		// If the resource does not exist, create it.
 		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
@@ -344,7 +327,7 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 	nextDeploymentApplyConfig.WithOwnerReferences(owner)
 
 	// Difference Check at Client-Side
-	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.DeploymentName}, &deployment); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.DeploymentName}, &deployment); err != nil {
 		// If the resource does not exist, create it.
 		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
@@ -376,7 +359,7 @@ func (r *SSANginxReconciler) applyDeployment(ctx context.Context, fieldMgr strin
 func (r *SSANginxReconciler) applyService(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
 		service       corev1.Service
-		serviceClient = kclientset.CoreV1().Services(constants.Namespace)
+		serviceClient = r.Clientset.CoreV1().Services(constants.Namespace)
 		labels        = map[string]string{"apps": "nginx"}
 	)
 
@@ -392,7 +375,7 @@ func (r *SSANginxReconciler) applyService(ctx context.Context, fieldMgr string, 
 	nextServiceApplyConfig.WithOwnerReferences(owner)
 
 	// Difference Check at Client-Side
-	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ServiceName}, &service); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: ssanginx.Spec.ServiceName}, &service); err != nil {
 		// If the resource does not exist, create it.
 		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
@@ -427,7 +410,7 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 		annotateVerifyClient  = map[string]string{"nginx.ingress.kubernetes.io/auth-tls-verify-client": "on"}
 		annotateTlsSecret     = map[string]string{"nginx.ingress.kubernetes.io/auth-tls-secret": fmt.Sprintf("%s/%s", constants.Namespace, constants.IngressSecretName)}
 		ingress               networkv1.Ingress
-		ingressClient         = kclientset.NetworkingV1().Ingresses(constants.Namespace)
+		ingressClient         = r.Clientset.NetworkingV1().Ingresses(constants.Namespace)
 		secrets               corev1.SecretList
 	)
 
@@ -446,8 +429,8 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 
 	if ssanginx.Spec.IngressSecureEnabled {
 		// Re-create Secret if 'spec.tls[].hosts[]' has changed
-		if len(ingress.GetName()) > 0 {
-			if err := r.List(ctx, &secrets, client.InNamespace(ssanginx.GetNamespace()),
+		if len(ingress.Spec.TLS) > 0 {
+			if err := r.Client.List(ctx, &secrets, client.InNamespace(ssanginx.GetNamespace()),
 				client.MatchingFields(map[string]string{constants.IndexOwnerKey: ssanginx.GetName()})); err != nil {
 				return err
 			}
@@ -456,7 +439,7 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 			sh := *ssanginx.Spec.IngressSpec.Rules[0].Host
 			if ih != sh {
 				for _, secret := range secrets.Items {
-					if err := r.Delete(ctx, &secret); err != nil {
+					if err := r.Client.Delete(ctx, &secret); err != nil {
 						return err
 					}
 					log.Info(fmt.Sprintf("delete Secret resource: %s", secret.GetName()))
@@ -517,10 +500,10 @@ func (r *SSANginxReconciler) applyIngress(ctx context.Context, fieldMgr string, 
 func (r *SSANginxReconciler) applyIngressSecret(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
 		secret       corev1.Secret
-		secretClient = kclientset.CoreV1().Secrets(constants.Namespace)
+		secretClient = r.Clientset.CoreV1().Secrets(constants.Namespace)
 	)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: constants.IngressSecretName}, &secret); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: constants.IngressSecretName}, &secret); err != nil {
 		// If the resource does not exist, create it.
 		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
@@ -577,10 +560,10 @@ func (r *SSANginxReconciler) applyIngressSecret(ctx context.Context, fieldMgr st
 func (r *SSANginxReconciler) applyClientSecret(ctx context.Context, fieldMgr string, log logr.Logger, ssanginx ssanginxv1.SSANginx) error {
 	var (
 		secret       corev1.Secret
-		secretClient = kclientset.CoreV1().Secrets(constants.Namespace)
+		secretClient = r.Clientset.CoreV1().Secrets(constants.Namespace)
 	)
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: constants.ClientSecretName}, &secret); err != nil {
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: constants.Namespace, Name: constants.ClientSecretName}, &secret); err != nil {
 		// If the resource does not exist, create it.
 		// Therefore, Not Found errors are ignored.
 		if !errors.IsNotFound(err) {
@@ -643,7 +626,7 @@ func (r *SSANginxReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		ssanginx ssanginxv1.SSANginx
 	)
 
-	if err := r.Get(ctx, req.NamespacedName, &ssanginx); err != nil {
+	if err := r.Client.Get(ctx, req.NamespacedName, &ssanginx); err != nil {
 		log.Error(err, "unable to fetch CR SSANginx")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
