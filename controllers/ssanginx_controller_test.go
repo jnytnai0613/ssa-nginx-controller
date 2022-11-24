@@ -23,8 +23,7 @@ import (
 )
 
 const (
-	resouceName        = "nginx"
-	rval        int32  = 3
+	cip                = corev1.ServiceTypeClusterIP
 	defaultconf string = `server {
 	listen 80 default_server;
 	listen [::]:80 default_server ipv6only=on;
@@ -53,9 +52,11 @@ Commercial support is available at
 <p><em>Thank you for using nginx.</em></p>
 </body>
 </html>`
-	cip   = corev1.ServiceTypeClusterIP
-	image = "nginx"
-	tport = 80
+	image             = "nginx"
+	hostname          = "nginx.example.com"
+	port              = 80
+	resouceName       = "nginx"
+	rval        int32 = 3
 )
 
 func testSSANginx() *ssanginxv1.SSANginx {
@@ -63,44 +64,45 @@ func testSSANginx() *ssanginxv1.SSANginx {
 	ssanginx.Namespace = constants.Namespace
 	ssanginx.Name = "test"
 
-	ssanginx.Spec.DeploymentName = resouceName
-	depSpec := appsv1apply.DeploymentSpec()
-	depSpec.WithReplicas(rval)
-	depSpec.WithTemplate(corev1apply.PodTemplateSpec().
-		WithSpec(corev1apply.PodSpec().
-			WithContainers(corev1apply.Container().
-				WithName(resouceName).
-				WithImage(image))))
-	ssanginx.Spec.DeploymentSpec = (*ssanginxv1.DeploymentSpecApplyConfiguration)(depSpec)
-
 	ssanginx.Spec.ConfigMapName = resouceName
 	m := make(map[string]string)
 	m["default.conf"] = defaultconf
 	m["index.html"] = indexhtml
 	ssanginx.Spec.ConfigMapData = m
 
+	ssanginx.Spec.DeploymentName = resouceName
+	depSpec := appsv1apply.DeploymentSpec()
+	depSpec.WithReplicas(rval).
+		WithTemplate(corev1apply.PodTemplateSpec().
+			WithSpec(corev1apply.PodSpec().
+				WithContainers(corev1apply.Container().
+					WithName(resouceName).
+					WithImage(image))))
+	ssanginx.Spec.DeploymentSpec = (*ssanginxv1.DeploymentSpecApplyConfiguration)(depSpec)
+
 	ssanginx.Spec.ServiceName = resouceName
 	svcSpec := corev1apply.ServiceSpec()
 	svcSpec.WithType(cip)
 	svcSpec.WithPorts(corev1apply.ServicePort().
 		WithProtocol(corev1.ProtocolTCP).
-		WithPort(80).
-		WithTargetPort(intstr.FromInt(tport)))
+		WithPort(port).
+		WithTargetPort(intstr.FromInt(port)))
 	ssanginx.Spec.ServiceSpec = (*ssanginxv1.ServiceSpecApplyConfiguration)(svcSpec)
 
 	ssanginx.Spec.IngressName = resouceName
 	ingressspec := networkv1apply.IngressSpec()
-	ingressspec.WithRules(networkv1apply.IngressRule().
-		WithHost("nginx.example.com").
-		WithHTTP(networkv1apply.HTTPIngressRuleValue().
-			WithPaths(networkv1apply.HTTPIngressPath().
-				WithPath("/").
-				WithPathType("Prefix").
-				WithBackend(networkv1apply.IngressBackend().
-					WithService(networkv1apply.IngressServiceBackend().
-						WithName("nginx").
-						WithPort(networkv1apply.ServiceBackendPort().
-							WithNumber(80)))))))
+	ingressspec.WithIngressClassName(constants.IngressClassName).
+		WithRules(networkv1apply.IngressRule().
+			WithHost(hostname).
+			WithHTTP(networkv1apply.HTTPIngressRuleValue().
+				WithPaths(networkv1apply.HTTPIngressPath().
+					WithPath("/").
+					WithPathType(networkingv1.PathTypePrefix).
+					WithBackend(networkv1apply.IngressBackend().
+						WithService(networkv1apply.IngressServiceBackend().
+							WithName("nginx").
+							WithPort(networkv1apply.ServiceBackendPort().
+								WithNumber(port)))))))
 	ssanginx.Spec.IngressSpec = (*ssanginxv1.IngressSpecApplyConfiguration)(ingressspec)
 	ssanginx.Spec.IngressSecureEnabled = false
 	return ssanginx
@@ -160,43 +162,66 @@ var _ = Describe("Test Controller", func() {
 	})
 
 	It("should create configmap resource", func() {
+		cm := &corev1.ConfigMap{}
 		Eventually(func(g Gomega) {
-			cm := &corev1.ConfigMap{}
 			key := client.ObjectKey{Namespace: constants.Namespace, Name: resouceName}
 			err := kClient.Get(ctx, key, cm)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(cm.OwnerReferences).ShouldNot(BeEmpty())
-		}, "5s").Should(Succeed())
+		}, 5*time.Second).Should(Succeed())
+
+		Expect(cm.OwnerReferences).ShouldNot(BeEmpty())
+		Expect(cm.Data["default.conf"]).Should(Equal(defaultconf))
+		Expect(cm.Data["index.html"]).Should(Equal(indexhtml))
 	})
 
 	It("should create deployment resource", func() {
+		dep := &appsv1.Deployment{}
 		Eventually(func(g Gomega) {
-			dep := &appsv1.Deployment{}
 			key := client.ObjectKey{Namespace: constants.Namespace, Name: resouceName}
 			err := kClient.Get(ctx, key, dep)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(dep.OwnerReferences).ShouldNot(BeEmpty())
 		}).Should(Succeed())
+
+		var r int32 = rval
+		Expect(dep.OwnerReferences).ShouldNot(BeEmpty())
+		Expect(dep.Spec.Replicas).Should(Equal(&r))
+		Expect(dep.Spec.Template.Spec.Containers[0].Name).Should(Equal(resouceName))
+		Expect(dep.Spec.Template.Spec.Containers[0].Image).Should(Equal(image))
 	})
 
 	It("should create service resource", func() {
+		svc := &corev1.Service{}
 		Eventually(func(g Gomega) {
-			svc := &corev1.Service{}
 			key := client.ObjectKey{Namespace: constants.Namespace, Name: resouceName}
 			err := kClient.Get(ctx, key, svc)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(svc.OwnerReferences).ShouldNot(BeEmpty())
 		}).Should(Succeed())
+
+		Expect(svc.OwnerReferences).ShouldNot(BeEmpty())
+		Expect(svc.Spec.Type).Should(Equal(cip))
+		Expect(svc.Spec.Ports[0].Protocol).Should(Equal(corev1.ProtocolTCP))
+		Expect(svc.Spec.Ports[0].Port).Should(Equal(int32(port)))
+		Expect(svc.Spec.Ports[0].TargetPort).Should(Equal(intstr.FromInt(port)))
 	})
 
 	It("should create ingress resource", func() {
+		ing := &networkingv1.Ingress{}
 		Eventually(func(g Gomega) {
-			ing := &networkingv1.Ingress{}
 			key := client.ObjectKey{Namespace: constants.Namespace, Name: resouceName}
 			err := kClient.Get(ctx, key, ing)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(ing.OwnerReferences).ShouldNot(BeEmpty())
-		}, "5s").Should(Succeed())
+		}, 5*time.Second).Should(Succeed())
+
+		bport := networkingv1.ServiceBackendPort{
+			Number: int32(port),
+		}
+		Expect(ing.OwnerReferences).ShouldNot(BeEmpty())
+		Expect(*ing.Spec.IngressClassName).Should(Equal(constants.IngressClassName))
+		Expect(ing.Spec.Rules[0].Host).Should(Equal(hostname))
+		Expect(ing.Spec.Rules[0].HTTP.Paths[0].Path).Should(Equal("/"))
+		Expect(*ing.Spec.Rules[0].HTTP.Paths[0].PathType).Should(Equal(networkingv1.PathTypePrefix))
+		Expect(ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Name).Should(Equal("nginx"))
+		Expect(ing.Spec.Rules[0].HTTP.Paths[0].Backend.Service.Port).Should(Equal(bport))
 	})
 
 	It("should create ca/server/client certtificate secret resource", func() {
@@ -209,21 +234,30 @@ var _ = Describe("Test Controller", func() {
 		err = kClient.Update(ctx, cr)
 		Expect(err).ShouldNot(HaveOccurred())
 
+		caSec := &corev1.Secret{}
 		Eventually(func(g Gomega) {
-			sec := &corev1.Secret{}
 			key := client.ObjectKey{Namespace: constants.Namespace, Name: "ca-secret"}
-			err := kClient.Get(ctx, key, sec)
+			err := kClient.Get(ctx, key, caSec)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(sec.OwnerReferences).ShouldNot(BeEmpty())
-		}, "5s").Should(Succeed())
+		}, 5*time.Second).Should(Succeed())
 
+		cliSec := &corev1.Secret{}
 		Eventually(func(g Gomega) {
-			sec := &corev1.Secret{}
 			key := client.ObjectKey{Namespace: constants.Namespace, Name: "cli-secret"}
-			err := kClient.Get(ctx, key, sec)
+			err := kClient.Get(ctx, key, cliSec)
 			g.Expect(err).ShouldNot(HaveOccurred())
-			g.Expect(sec.OwnerReferences).ShouldNot(BeEmpty())
-		}, "5s").Should(Succeed())
+		}, 5*time.Second).Should(Succeed())
+
+		Expect(caSec.OwnerReferences).ShouldNot(BeEmpty())
+		Expect(cliSec.OwnerReferences).ShouldNot(BeEmpty())
+
+		ing := &networkingv1.Ingress{}
+		key = client.ObjectKey{Namespace: constants.Namespace, Name: resouceName}
+		err = kClient.Get(ctx, key, ing)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		Expect(ing.Spec.TLS[0].Hosts[0]).Should(Equal(hostname))
+		Expect(ing.Spec.TLS[0].SecretName).Should(Equal(caSec.GetName()))
 	})
 
 	It("should update configmap name", func() {
