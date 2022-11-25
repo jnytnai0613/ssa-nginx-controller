@@ -82,11 +82,11 @@ func testSSANginx() *ssanginxv1.SSANginx {
 
 	ssanginx.Spec.ServiceName = resouceName
 	svcSpec := corev1apply.ServiceSpec()
-	svcSpec.WithType(cip)
-	svcSpec.WithPorts(corev1apply.ServicePort().
-		WithProtocol(corev1.ProtocolTCP).
-		WithPort(port).
-		WithTargetPort(intstr.FromInt(port)))
+	svcSpec.WithType(cip).
+		WithPorts(corev1apply.ServicePort().
+			WithProtocol(corev1.ProtocolTCP).
+			WithPort(port).
+			WithTargetPort(intstr.FromInt(port)))
 	ssanginx.Spec.ServiceSpec = (*ssanginxv1.ServiceSpecApplyConfiguration)(svcSpec)
 
 	ssanginx.Spec.IngressName = resouceName
