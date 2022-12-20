@@ -1137,6 +1137,16 @@ spec:
                                     represents an declarative configuration of the
                                     ResourceRequirements type for use with apply.
                                   properties:
+                                    claims:
+                                      items:
+                                        description: ResourceClaimApplyConfiguration
+                                          represents an declarative configuration
+                                          of the ResourceClaim type for use with apply.
+                                        properties:
+                                          name:
+                                            type: string
+                                        type: object
+                                      type: array
                                     limits:
                                       additionalProperties:
                                         anyOf:
@@ -1881,6 +1891,16 @@ spec:
                                     represents an declarative configuration of the
                                     ResourceRequirements type for use with apply.
                                   properties:
+                                    claims:
+                                      items:
+                                        description: ResourceClaimApplyConfiguration
+                                          represents an declarative configuration
+                                          of the ResourceClaim type for use with apply.
+                                        properties:
+                                          name:
+                                            type: string
+                                        type: object
+                                      type: array
                                     limits:
                                       additionalProperties:
                                         anyOf:
@@ -2629,6 +2649,16 @@ spec:
                                     represents an declarative configuration of the
                                     ResourceRequirements type for use with apply.
                                   properties:
+                                    claims:
+                                      items:
+                                        description: ResourceClaimApplyConfiguration
+                                          represents an declarative configuration
+                                          of the ResourceClaim type for use with apply.
+                                        properties:
+                                          name:
+                                            type: string
+                                        type: object
+                                      type: array
                                     limits:
                                       additionalProperties:
                                         anyOf:
@@ -2919,6 +2949,26 @@ spec:
                                   type: string
                               type: object
                             type: array
+                          resourceClaims:
+                            items:
+                              description: PodResourceClaimApplyConfiguration represents
+                                an declarative configuration of the PodResourceClaim
+                                type for use with apply.
+                              properties:
+                                name:
+                                  type: string
+                                source:
+                                  description: ClaimSourceApplyConfiguration represents
+                                    an declarative configuration of the ClaimSource
+                                    type for use with apply.
+                                  properties:
+                                    resourceClaimName:
+                                      type: string
+                                    resourceClaimTemplateName:
+                                      type: string
+                                  type: object
+                              type: object
+                            type: array
                           restartPolicy:
                             description: RestartPolicy describes how the container
                               should be restarted. Only one of the following restart
@@ -2929,6 +2979,16 @@ spec:
                             type: string
                           schedulerName:
                             type: string
+                          schedulingGates:
+                            items:
+                              description: PodSchedulingGateApplyConfiguration represents
+                                an declarative configuration of the PodSchedulingGate
+                                type for use with apply.
+                              properties:
+                                name:
+                                  type: string
+                              type: object
+                            type: array
                           securityContext:
                             description: PodSecurityContextApplyConfiguration represents
                               an declarative configuration of the PodSecurityContext
@@ -3431,16 +3491,18 @@ spec:
                                                   type: string
                                               type: object
                                             dataSourceRef:
-                                              description: TypedLocalObjectReferenceApplyConfiguration
+                                              description: TypedObjectReferenceApplyConfiguration
                                                 represents an declarative configuration
-                                                of the TypedLocalObjectReference type
-                                                for use with apply.
+                                                of the TypedObjectReference type for
+                                                use with apply.
                                               properties:
                                                 apiGroup:
                                                   type: string
                                                 kind:
                                                   type: string
                                                 name:
+                                                  type: string
+                                                namespace:
                                                   type: string
                                               type: object
                                             resources:
@@ -3449,6 +3511,17 @@ spec:
                                                 of the ResourceRequirements type for
                                                 use with apply.
                                               properties:
+                                                claims:
+                                                  items:
+                                                    description: ResourceClaimApplyConfiguration
+                                                      represents an declarative configuration
+                                                      of the ResourceClaim type for
+                                                      use with apply.
+                                                    properties:
+                                                      name:
+                                                        type: string
+                                                    type: object
+                                                  type: array
                                                 limits:
                                                   additionalProperties:
                                                     anyOf:
