@@ -252,9 +252,11 @@ var _ = Describe("Test Controller", func() {
 		Expect(cliSec.OwnerReferences).ShouldNot(BeEmpty())
 
 		ing := &networkingv1.Ingress{}
-		key = client.ObjectKey{Namespace: constants.Namespace, Name: resouceName}
-		err = kClient.Get(ctx, key, ing)
-		Expect(err).ShouldNot(HaveOccurred())
+		Eventually(func(g Gomega) {
+			key = client.ObjectKey{Namespace: constants.Namespace, Name: resouceName}
+			err = kClient.Get(ctx, key, ing)
+			Expect(err).ShouldNot(HaveOccurred())
+		}, 5*time.Second).Should(Succeed())
 
 		Expect(ing.Spec.TLS[0].Hosts[0]).Should(Equal(hostname))
 		Expect(ing.Spec.TLS[0].SecretName).Should(Equal(caSec.GetName()))
